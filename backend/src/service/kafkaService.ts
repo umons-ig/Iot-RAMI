@@ -1,4 +1,4 @@
-import { Kafka, Consumer } from "kafkajs";
+import { Kafka, Consumer, SASLOptions } from "kafkajs";
 import { envs } from "@/utils/env";
 class KafkaService {
   private static instance: KafkaService | undefined;
@@ -28,7 +28,17 @@ class KafkaService {
     try {
       this.kafka = new Kafka({
         clientId: "sensor-app",
-        brokers: [envs.KAFKA_BROKERS],
+        brokers: envs.KAFKA_BROKERS.split(","),
+        // Sécurité optionnelle : défaut = PLAINTEXT (subnet local de confiance).
+        // Activer via variables d'env pour un réseau non fiable (voir docs/ETAT_DES_LIEUX.md).
+        ssl: process.env.KAFKA_SSL === "true",
+        sasl: process.env.KAFKA_SASL_USERNAME
+          ? ({
+              mechanism: process.env.KAFKA_SASL_MECHANISM ?? "scram-sha-512",
+              username: process.env.KAFKA_SASL_USERNAME,
+              password: process.env.KAFKA_SASL_PASSWORD ?? "",
+            } as SASLOptions)
+          : undefined,
         retry: {
           initialRetryTime: 100,
           retries: 5,
@@ -65,13 +75,21 @@ class KafkaService {
         await this.consumer.subscribe({ topic });
       }
       await this.consumer.run({
-        eachMessage: async ({ topic, message }) => {
-          const callback = this.mapTopicCallbacks.get(topic);
-          if (callback) {
-            const data = JSON.parse(message.value?.toString() || "");
-            await callback(data);
-          } else {
-            console.warn("⚠️ No callback registered for topic:", topic);
+        eachBatch: async ({ batch, resolveOffset, heartbeat }) => {
+          for (const message of batch.messages) {
+            if (!message.value) {
+              console.warn("⚠️ [Kafka] Message vide reçu, ignoré");
+              continue;
+            }
+            const data = JSON.parse(message.value.toString());
+            const callback = this.mapTopicCallbacks.get(batch.topic);
+            if (callback) {
+              await callback(data);
+            } else {
+              console.warn("⚠️ No callback registered for topic:", batch.topic);
+            }
+            resolveOffset(message.offset);
+            await heartbeat();
           }
         },
       });

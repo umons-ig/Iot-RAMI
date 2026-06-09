@@ -27,6 +27,16 @@ class KafkaService {
       this.kafka = new Kafka({
         clientId: "fog-service",
         brokers: KAFKA_CONFIG.brokers,
+        // Sécurité optionnelle — défaut PLAINTEXT (subnet local de confiance).
+        // ssl: false et sasl: undefined => comportement identique à aujourd'hui.
+        ssl: process.env.KAFKA_SSL === "true",
+        sasl: process.env.KAFKA_SASL_USERNAME
+          ? {
+              mechanism: (process.env.KAFKA_SASL_MECHANISM ?? "scram-sha-512") as any,
+              username: process.env.KAFKA_SASL_USERNAME,
+              password: process.env.KAFKA_SASL_PASSWORD ?? "",
+            }
+          : undefined,
         retry: {
           initialRetryTime: 100,
           retries: 5,
@@ -34,6 +44,16 @@ class KafkaService {
       });
 
       this.producer = this.kafka.producer();
+
+      // Refléter l'état réel de la connexion : kafkajs gère sa propre
+      // reconnexion interne, on se contente de suivre le flag.
+      this.producer.on(this.producer.events.DISCONNECT, () => {
+        this.isKafkaConnected = false;
+        console.warn("[Kafka] Producer déconnecté");
+      });
+      this.producer.on(this.producer.events.CONNECT, () => {
+        this.isKafkaConnected = true;
+      });
     } catch (error) {
       console.error("❌ [Kafka] Erreur de connexion:", error);
       throw error;
@@ -56,7 +76,7 @@ class KafkaService {
     try {
       await this.producer.send({
         topic,
-        messages: [{ value: JSON.stringify(data) }],
+        messages: [{ key: data.sensorTopic, value: JSON.stringify(data) }],
         compression: CompressionTypes.GZIP,
       });
     } catch (error) {
@@ -70,6 +90,7 @@ class KafkaService {
   ): Promise<void> {
     try {
       const messages = dataArray.map((data) => ({
+        key: data.sensorTopic,
         value: JSON.stringify(data),
       }));
       await this.producer.send({

@@ -28,6 +28,57 @@ class MqttFog {
     return MqttFog.instance;
   }
 
+  /**
+   * Arrêt propre : flushe tous les buffers en mémoire vers Kafka,
+   * déconnecte le producteur Kafka, puis ferme le client MQTT.
+   * Appelé sur SIGTERM/SIGINT pour éviter la perte des mesures bufferisées.
+   */
+  public async shutdown(): Promise<void> {
+    console.log("[FogService] Arrêt en cours — flush des buffers...");
+
+    // 1. Flush de tous les topics en parallèle, sans qu'une erreur par topic ne bloque les autres
+    const topics = [...this.buffer.keys()];
+    await Promise.all(
+      topics.map((topic) =>
+        this.flushBuffer(topic).catch((e) =>
+          console.error(`❌ [shutdown] Erreur flush ${topic}:`, e),
+        ),
+      ),
+    );
+
+    // Stopper le flush périodique et les timers résiduels
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = undefined;
+    }
+    this.sensorTimeouts.forEach((t) => clearTimeout(t));
+    this.sensorTimeouts.clear();
+    this.sessionTimers.forEach((t) => clearTimeout(t));
+    this.sessionTimers.clear();
+
+    // 2. Déconnexion du producteur Kafka
+    try {
+      const kafka = await KafkaService.getInstance();
+      await kafka.disconnect();
+    } catch (e) {
+      console.error("❌ [shutdown] Erreur déconnexion Kafka:", e);
+    }
+
+    // 3. Fermeture propre du client MQTT
+    await new Promise<void>((resolve) => {
+      if (!this.mqttClient) {
+        resolve();
+        return;
+      }
+      this.mqttClient.end(false, {}, () => {
+        console.log("[MQTT] Client fermé");
+        resolve();
+      });
+    });
+
+    console.log("[FogService] Arrêt terminé");
+  }
+
   private async connectBroker(): Promise<void> {
     try {
       const connectOptions: mqtt.IClientOptions = {
@@ -54,6 +105,19 @@ class MqttFog {
       // Handler d'erreur
       this.mqttClient.on("error", (error) => {
         console.error("❌ [MQTT] Erreur:", error);
+      });
+
+      // Handlers de cycle de vie de la connexion (visibilité des coupures)
+      this.mqttClient.on("reconnect", () => {
+        console.log("[MQTT] Tentative de reconnexion au broker...");
+      });
+
+      this.mqttClient.on("offline", () => {
+        console.warn("[MQTT] Client hors ligne (broker injoignable)");
+      });
+
+      this.mqttClient.on("close", () => {
+        console.warn("[MQTT] Connexion au broker fermée");
       });
 
     } catch (error) {
