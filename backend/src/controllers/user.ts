@@ -591,8 +591,11 @@ const refresh = async (req: Request, res: Response) => {
           new UnauthorizedException("User not found", "auth.token.invalid")
         );
     }
+    // Rejeter aussi les refresh tokens sans version (émis avant la migration
+    // refreshTokenVersion) : sinon le logout (qui incrémente la version) ne
+    // pourrait pas les révoquer avant leur expiration. -> re-login forcé.
     if (
-      typeof payload.refreshTokenVersion === "number" &&
+      typeof payload.refreshTokenVersion !== "number" ||
       dbUser.refreshTokenVersion !== payload.refreshTokenVersion
     ) {
       return res
