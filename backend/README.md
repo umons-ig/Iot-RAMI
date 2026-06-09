@@ -42,7 +42,7 @@ DB_VERSION=13
 DB_PORT_OUT=5432
 DB_PORT_IN=5432
 DB_USER=umons-sensor-dev
-DB_PASSWORD=umons-sensor-dev
+DB_PASSWORD=change_me
 DB_NAME=umons-sensor-db-dev
 
 NODE_ENV=development
@@ -51,7 +51,7 @@ NODE_PORT_IN=3000
 NODE_PORT_OUT=3000
 NODE_CONTAINER_NAME=umons-sensor-dev
 
-JWT_SECRET=umons-sensor-dev
+JWT_SECRET=change-me-in-production
 JWT_EXPIRATION=1d
 BCRYPT_SALT_ROUNDS=10
 
