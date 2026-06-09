@@ -22,6 +22,7 @@ interface UserCreation {
   email: string | null;
   password: string | null;
   role: Role;
+  refreshTokenVersion?: number;
 }
 
 interface User {
@@ -33,6 +34,7 @@ interface User {
   email: string | null;
   password: string | null;
   role: Role;
+  refreshTokenVersion: number;
 }
 
 type UserModel = Model<User, UserCreation>;
@@ -47,6 +49,7 @@ type UserStatic = typeof Model & {
 interface UserPayload {
   userId: string;
   role: Role;
+  tokenVersion: number;
   iat: number;
   exp: number;
 }

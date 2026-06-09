@@ -11,19 +11,20 @@ import {
   getAllActiveSessions,
   getSessionAggregate,
 } from "@controllers/session";
+import { auth, authAdmin } from "@middlewares/auth";
 
 const router = express.Router();
 // Only depends on session model
-router.post("/new", createSessionOnClientSide);
-router.post("/new/on/server", createSessionOnServerSide);
-router.get("/", getAllSessions);
-router.get("/active", getAllActiveSessions);
-router.get("/:id", getSessionById);
-router.delete("/:id", deleteSessionAndItsCorrespondingData);
-router.delete("/", deleteAllSessions);
+router.post("/new", auth, createSessionOnClientSide);
+router.post("/new/on/server", auth, createSessionOnServerSide);
+router.get("/", auth, getAllSessions);
+router.get("/active", auth, getAllActiveSessions);
+router.get("/:id", auth, getSessionById);
+router.delete("/:id", authAdmin, deleteSessionAndItsCorrespondingData);
+router.delete("/", authAdmin, deleteAllSessions);
 // Depend at least on two models
-router.get("/:id/export/csv", exportSessionAsCsv);
-router.get("/:id/data", getSessionData);
-router.get("/:id/aggregate", getSessionAggregate);
+router.get("/:id/export/csv", auth, exportSessionAsCsv);
+router.get("/:id/data", auth, getSessionData);
+router.get("/:id/aggregate", auth, getSessionAggregate);
 
 export { router as sessionRoutes };
