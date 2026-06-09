@@ -1064,6 +1064,7 @@ describe("User controller", () => {
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: mockUserOfUserType.id,
         role: mockUserOfUserType.role,
+        refreshTokenVersion: 0,
       });
       User.findByPk = jest.fn().mockResolvedValue({
         id: mockUserOfUserType.id,
@@ -1081,10 +1082,31 @@ describe("User controller", () => {
       expect(response.body.expiresAt).toBeGreaterThan(Date.now());
     });
 
+    test("should return 401 if refresh token has no version (pre-migration)", async () => {
+      (jwt.verify as jest.Mock).mockReturnValue({
+        userId: mockUserOfUserType.id,
+        role: mockUserOfUserType.role,
+        // pas de refreshTokenVersion -> token pré-migration, doit être rejeté
+      });
+      User.findByPk = jest.fn().mockResolvedValue({
+        id: mockUserOfUserType.id,
+        role: mockUserOfUserType.role,
+        refreshTokenVersion: 0,
+      });
+
+      const response = await superTest(app)
+        .post(`${authBaseUri}/refresh`)
+        .set("Cookie", "refreshToken=unversioned-token");
+
+      expect(response.statusCode).toBe(401);
+      expect(response.body.codeError).toBe("auth.token.revoked");
+    });
+
     test("should set a new refresh token cookie on success", async () => {
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: mockUserOfUserType.id,
         role: mockUserOfUserType.role,
+        refreshTokenVersion: 0,
       });
       User.findByPk = jest.fn().mockResolvedValue({
         id: mockUserOfUserType.id,
