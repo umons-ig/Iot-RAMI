@@ -23,6 +23,13 @@ jest.mock("../kafkaProducer", () => ({
   },
 }));
 
+// --- Mock Outbox (store-and-forward durable) ---
+const outboxEnqueue = jest.fn().mockResolvedValue(undefined);
+const outboxPullPending = jest.fn().mockResolvedValue([]);
+const outboxMarkSynced = jest.fn().mockResolvedValue(undefined);
+const outboxPurgeSynced = jest.fn().mockResolvedValue(0);
+const outboxClose = jest.fn().mockResolvedValue(undefined);
+
 // Import APRES les mocks
 import MqttFog from "../mqttFog";
 
@@ -33,15 +40,26 @@ function createFogInstance(): any {
   const instance = Object.create((MqttFog as any).prototype);
   instance.mqttClient = { on: jest.fn(), publish: mqttPublish, subscribe: mqttSubscribe };
   instance.kafkaService = { publishBatchSensorData };
+  instance.outbox = {
+    enqueue: outboxEnqueue,
+    pullPending: outboxPullPending,
+    markSynced: outboxMarkSynced,
+    purgeSynced: outboxPurgeSynced,
+    close: outboxClose,
+  };
   instance.buffer = new Map();
   instance.flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   instance.flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   instance.maxBufferSize = BUFFER_CONFIG.maxBufferSize;
   instance.sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
+  instance.replicatorBatchSize = 200;
+  instance.isReplicating = false;
   instance.dropWarnedTopics = new Set();
   instance.sensorTimeouts = new Map();
   instance.sessionTimers = new Map();
   instance.flushInterval = undefined;
+  instance.replicatorInterval = undefined;
+  instance.purgeInterval = undefined;
   return instance;
 }
 
@@ -64,8 +82,8 @@ describe("MqttFog — handleMessageReceivedFromSensor (routing)", () => {
   });
 
   it("ignore les topics qui ne se terminent pas par /sensor", () => {
-    const spy = jest.spyOn(fog, "handleStart" in fog ? "handleStart" : "startSession");
     fog.handleMessageReceivedFromSensor("capteur-A/server", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.START }));
+    expect(outboxEnqueue).not.toHaveBeenCalled();
     expect(publishBatchSensorData).not.toHaveBeenCalled();
   });
 
@@ -108,13 +126,10 @@ describe("MqttFog — startSession", () => {
     expect(fog.buffer.has("capteur-A/sensor")).toBe(true);
   });
 
-  it("publie un message Kafka de type 'start'", async () => {
+  it("persiste un événement 'start' dans l'outbox", async () => {
     await fog.startSession("capteur-A/sensor");
-    expect(publishBatchSensorData).toHaveBeenCalledWith(
-      "sensor-data",
-      expect.arrayContaining([
-        expect.objectContaining({ type: "start", sensorTopic: "capteur-A/sensor" }),
-      ])
+    expect(outboxEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "start", sensorTopic: "capteur-A/sensor" })
     );
   });
 
@@ -147,11 +162,10 @@ describe("MqttFog — handleStart", () => {
     jest.useRealTimers();
   });
 
-  it("publie START Kafka et envoie ACK MQTT", async () => {
+  it("persiste START dans l'outbox et envoie ACK MQTT", async () => {
     await fog.handleStart("capteur-A/sensor");
-    expect(publishBatchSensorData).toHaveBeenCalledWith(
-      "sensor-data",
-      expect.arrayContaining([expect.objectContaining({ type: "start" })])
+    expect(outboxEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "start" })
     );
     expect(mqttPublish).toHaveBeenCalledWith(
       "capteur-A/server",
@@ -183,32 +197,26 @@ describe("MqttFog — rotation de session (timer)", () => {
     fog.sensorTimeouts.clear();
   });
 
-  it("déclenche STOP puis START Kafka après sessionMaxDurationMs", async () => {
+  it("déclenche STOP puis START (outbox) après sessionMaxDurationMs", async () => {
     // Après le premier cycle, remplacer startSession par un no-op pour couper la récursivité
     const origStartSession = fog.startSession.bind(fog);
     let callCount = 0;
     fog.startSession = async (topic: string) => {
       callCount++;
       if (callCount === 1) return origStartSession(topic);
-      // Rotation : juste publier le START, sans recréer de timer
-      await publishBatchSensorData("sensor-data", [
-        { type: "start", sensorTopic: topic, timestamp: Date.now() },
-      ]);
+      // Rotation : juste persister le START, sans recréer de timer
+      await outboxEnqueue({ type: "start", sensorTopic: topic, timestamp: Date.now() });
     };
 
     await fog.handleStart("capteur-A/sensor");
-    publishBatchSensorData.mockClear();
+    outboxEnqueue.mockClear();
 
     // Attendre l'expiration naturelle du timer (100ms + marge)
     await new Promise<void>((resolve) => setTimeout(resolve, 250));
 
-    const calls = publishBatchSensorData.mock.calls;
-    const stopCall = calls.find((c: any[]) =>
-      c[1]?.some?.((m: any) => m.type === "stop")
-    );
-    const startCall = calls.find((c: any[]) =>
-      c[1]?.some?.((m: any) => m.type === "start")
-    );
+    const calls = outboxEnqueue.mock.calls;
+    const stopCall = calls.find((c: any[]) => c[0]?.type === "stop");
+    const startCall = calls.find((c: any[]) => c[0]?.type === "start");
     expect(stopCall).toBeDefined();
     expect(startCall).toBeDefined();
   }, 5000);
@@ -221,9 +229,7 @@ describe("MqttFog — rotation de session (timer)", () => {
       if (callCount === 1) return origStartSession(topic);
       // Rotation : enregistrer un nouveau timer non-récursif dans la map
       fog.buffer.set(topic, []);
-      await publishBatchSensorData("sensor-data", [
-        { type: "start", sensorTopic: topic, timestamp: Date.now() },
-      ]);
+      await outboxEnqueue({ type: "start", sensorTopic: topic, timestamp: Date.now() });
       const timer = setTimeout(() => {}, 999999);
       fog.sessionTimers.set(topic, timer);
     };
@@ -253,30 +259,30 @@ describe("MqttFog — handleStop", () => {
     jest.useRealTimers();
   });
 
-  it("publie STOP Kafka et vide le buffer", async () => {
+  it("persiste STOP dans l'outbox et vide le buffer", async () => {
     fog.buffer.set("capteur-A/sensor", [{ measures: [], timestamp: 1 }]);
     await fog.handleStop("capteur-A/sensor");
-    expect(publishBatchSensorData).toHaveBeenCalledWith(
-      "sensor-data",
-      expect.arrayContaining([expect.objectContaining({ type: "stop" })])
+    expect(outboxEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "stop" })
     );
     expect(fog.buffer.has("capteur-A/sensor")).toBe(false);
   });
 
   it("annule le sessionTimer — pas de rotation après handleStop manuel", async () => {
     await fog.handleStart("capteur-A/sensor");
-    publishBatchSensorData.mockClear();
+    outboxEnqueue.mockClear();
 
     // Stop manuel avant l'expiration du timer
     await fog.handleStop("capteur-A/sensor");
+    outboxEnqueue.mockClear();
 
     // Avancer le temps : le timer annulé ne doit plus rien déclencher
     jest.advanceTimersByTime(2000);
     await Promise.resolve();
 
-    // Aucun nouveau START ne doit être publié
-    const startCalls = publishBatchSensorData.mock.calls.filter((c: any[]) =>
-      c[1]?.some?.((m: any) => m.type === "start")
+    // Aucun nouveau START ne doit être persisté
+    const startCalls = outboxEnqueue.mock.calls.filter(
+      (c: any[]) => c[0]?.type === "start"
     );
     expect(startCalls).toHaveLength(0);
   });
@@ -367,5 +373,86 @@ describe("MqttFog — handlePing", () => {
     jest.advanceTimersByTime(30000);
     await Promise.resolve();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("MqttFog — flushBuffer (write-ahead vers l'outbox)", () => {
+  let fog: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fog = createFogInstance();
+  });
+
+  it("persiste un batch 'data' dans l'outbox et vide le buffer", async () => {
+    fog.buffer.set("capteur-A/sensor", [{ measures: [{ value: 1 }], timestamp: 1 }]);
+    await fog.flushBuffer("capteur-A/sensor");
+    expect(outboxEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "data", sensorTopic: "capteur-A/sensor" })
+    );
+    expect(fog.buffer.get("capteur-A/sensor")).toHaveLength(0);
+  });
+
+  it("ne persiste rien si le buffer est vide", async () => {
+    fog.buffer.set("capteur-A/sensor", []);
+    await fog.flushBuffer("capteur-A/sensor");
+    expect(outboxEnqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("MqttFog — replicate (réplicateur store-and-forward)", () => {
+  let fog: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fog = createFogInstance();
+  });
+
+  it("publie les payloads pending vers Kafka puis marque synced (succès)", async () => {
+    const rows = [
+      { id: 1, payload: { type: "data", sensorTopic: "capteur-A/sensor", measures: [] } },
+      { id: 2, payload: { type: "stop", sensorTopic: "capteur-A/sensor", timestamp: 1 } },
+    ];
+    outboxPullPending.mockResolvedValueOnce(rows);
+
+    await fog.replicate();
+
+    expect(publishBatchSensorData).toHaveBeenCalledWith(
+      "sensor-data",
+      [rows[0].payload, rows[1].payload]
+    );
+    expect(outboxMarkSynced).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it("ne fait rien s'il n'y a pas de lignes pending", async () => {
+    outboxPullPending.mockResolvedValueOnce([]);
+    await fog.replicate();
+    expect(publishBatchSensorData).not.toHaveBeenCalled();
+    expect(outboxMarkSynced).not.toHaveBeenCalled();
+  });
+
+  it("ne marque PAS synced si la publication Kafka échoue", async () => {
+    const rows = [
+      { id: 5, payload: { type: "data", sensorTopic: "capteur-A/sensor", measures: [] } },
+    ];
+    outboxPullPending.mockResolvedValueOnce(rows);
+    publishBatchSensorData.mockRejectedValueOnce(new Error("Kafka down"));
+
+    await fog.replicate();
+
+    expect(publishBatchSensorData).toHaveBeenCalled();
+    expect(outboxMarkSynced).not.toHaveBeenCalled();
+  });
+
+  it("réinitialise isReplicating même en cas d'erreur (finally)", async () => {
+    outboxPullPending.mockRejectedValueOnce(new Error("DB down"));
+    await fog.replicate();
+    expect(fog.isReplicating).toBe(false);
+  });
+
+  it("ignore les ticks concurrents (isReplicating)", async () => {
+    fog.isReplicating = true;
+    await fog.replicate();
+    expect(outboxPullPending).not.toHaveBeenCalled();
   });
 });
