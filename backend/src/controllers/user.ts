@@ -102,10 +102,15 @@ const generateUserResponse = (
       userId: user.id,
       role: user.role,
     };
+    const refreshPayload = {
+      userId: user.id,
+      role: user.role,
+      refreshTokenVersion: (user as any).refreshTokenVersion ?? 0,
+    };
     token = jwt.sign(payload, secret, {
       expiresIn: envs.JWT_EXPIRATION as any,
     });
-    const refreshToken = jwt.sign(payload, envs.REFRESH_TOKEN_SECRET, {
+    const refreshToken = jwt.sign(refreshPayload, envs.REFRESH_TOKEN_SECRET, {
       expiresIn: envs.REFRESH_TOKEN_EXPIRATION as any,
     });
     res.cookie("refreshToken", refreshToken, {
@@ -250,15 +255,7 @@ const login = async (req: Request, res: Response) => {
 const updateUserInformation = async (req: Request, res: Response) => {
   try {
     const { firstName, lastName, sex, email, password, newPassword } = req.body;
-    const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
-
-    if (!token) {
-      return res
-        .status(400)
-        .json(
-          new BadRequestException("No token provided !", "auth.token.not.found")
-        );
-    }
+    const payload = req.user as UserPayload;
 
     if (
       !firstName ||
@@ -302,20 +299,7 @@ const updateUserInformation = async (req: Request, res: Response) => {
     }
 
     // Now, we need to get the current user
-    // 1) We get the current user id by using the payload
-    const secret = envs.JWT_SECRET;
-    const payload = jwt.verify(token, secret) as UserPayload;
-    if (!payload) {
-      return res
-        .status(401)
-        .json(
-          new UnauthorizedException(
-            "Unauthorized (invalid token) !",
-            "auth.token.invalid"
-          )
-        );
-    }
-
+    // 1) We get the current user id by using the payload attached by the auth middleware
     const currentUserId = payload.userId;
 
     // 2) Let's find the user in the database
@@ -378,7 +362,8 @@ const updateUserInformation = async (req: Request, res: Response) => {
         .json(new ServerErrorException("Server error !", "server.error"));
     }
 
-    const responseData = generateUserResponse(updatedUser, res, token);
+    const currentToken = req.headers.authorization?.split(" ")[1];
+    const responseData = generateUserResponse(updatedUser, res, currentToken);
     return res.status(200).json(responseData);
   } catch (error) {
     return res
@@ -389,16 +374,8 @@ const updateUserInformation = async (req: Request, res: Response) => {
 
 const updateRole = async (req: Request, res: Response) => {
   const { email, role } = req.body;
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const payload = req.user as UserPayload;
   const roleEnum = role as Role;
-
-  if (!token) {
-    return res
-      .status(400)
-      .json(
-        new BadRequestException("No token provided !", "auth.token.not.found")
-      );
-  }
 
   if (
     !email ||
@@ -434,18 +411,6 @@ const updateRole = async (req: Request, res: Response) => {
         .json(new BadRequestException("User not found !", "user.not.found"));
     }
 
-    const secret = envs.JWT_SECRET;
-    const payload = jwt.verify(token, secret) as UserPayload;
-    if (!payload) {
-      return res
-        .status(401)
-        .json(
-          new UnauthorizedException(
-            "Unauthorized (invalid token) !",
-            "auth.token.invalid"
-          )
-        );
-    }
     if (isStrictlyBetterThan(payload.role, roleEnum)) {
       return res
         .status(401)
@@ -476,23 +441,9 @@ const updateRole = async (req: Request, res: Response) => {
 };
 
 const haveRightsToAcessToAdminPanel = async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
-
-  if (!token) {
-    return res
-      .status(400)
-      .json(
-        new BadRequestException("No token provided !", "auth.token.not.found")
-      );
-  }
+  const decodedToken = req.user as UserPayload;
 
   try {
-    const decodedToken = jwt.verify(token, envs.JWT_SECRET) as UserPayload;
-    if (!decodedToken) {
-      return res
-        .status(400)
-        .json(new BadRequestException("Invalid token !", "auth.token.invalid"));
-    }
     if (isBetterThan(decodedToken.role, Role.PRIVILEGED)) {
       return res
         .status(401)
@@ -523,23 +474,9 @@ const getAllRoleWithWorseRoleThan = (role: Role) => {
 };
 
 const getAllRoleWithWorseRole = async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
-
-  if (!token) {
-    return res
-      .status(400)
-      .json(
-        new BadRequestException("No token provided !", "auth.token.not.found")
-      );
-  }
+  const decodedToken = req.user as UserPayload;
 
   try {
-    const decodedToken = jwt.verify(token, envs.JWT_SECRET) as UserPayload;
-    if (!decodedToken) {
-      return res
-        .status(400)
-        .json(new BadRequestException("Invalid token !", "auth.token.invalid"));
-    }
     const roles = getAllRoleWithWorseRoleThan(decodedToken.role);
     if (roles.length === 0) {
       return res
@@ -601,7 +538,24 @@ const getUserSessions = async (req: Request, res: Response) => {
   }
 };
 
-const logout = (_req: Request, res: Response) => {
+const logout = async (req: Request, res: Response) => {
+  try {
+    const token = req.cookies.refreshToken;
+    if (token) {
+      try {
+        const payload = jwt.verify(token, envs.REFRESH_TOKEN_SECRET) as {
+          userId: string;
+        };
+        await User.increment("refreshTokenVersion", {
+          where: { id: payload.userId },
+        });
+      } catch {
+        // Token invalide ou expiré — on efface quand même le cookie
+      }
+    }
+  } catch {
+    // Ignore
+  }
   res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -610,7 +564,7 @@ const logout = (_req: Request, res: Response) => {
   return res.status(200).json({ message: "Logged out successfully" });
 };
 
-const refresh = (req: Request, res: Response) => {
+const refresh = async (req: Request, res: Response) => {
   try {
     const token = req.cookies.refreshToken;
     if (!token) {
@@ -624,7 +578,28 @@ const refresh = (req: Request, res: Response) => {
         );
     }
     const secret = envs.REFRESH_TOKEN_SECRET;
-    const payload = jwt.verify(token, secret) as UserPayload;
+    const payload = jwt.verify(token, secret) as UserPayload & {
+      refreshTokenVersion?: number;
+    };
+
+    // Vérifier la version en DB
+    const dbUser = await User.findByPk(payload.userId);
+    if (!dbUser) {
+      return res
+        .status(401)
+        .json(
+          new UnauthorizedException("User not found", "auth.token.invalid")
+        );
+    }
+    if (
+      typeof payload.refreshTokenVersion === "number" &&
+      dbUser.refreshTokenVersion !== payload.refreshTokenVersion
+    ) {
+      return res
+        .status(401)
+        .json(new UnauthorizedException("Token révoqué", "auth.token.revoked"));
+    }
+
     const newToken = jwt.sign(
       { userId: payload.userId, role: payload.role },
       envs.JWT_SECRET,
@@ -633,7 +608,11 @@ const refresh = (req: Request, res: Response) => {
       }
     );
     const newRefreshToken = jwt.sign(
-      { userId: payload.userId, role: payload.role },
+      {
+        userId: payload.userId,
+        role: payload.role,
+        refreshTokenVersion: dbUser.refreshTokenVersion,
+      },
       envs.REFRESH_TOKEN_SECRET,
       {
         expiresIn: envs.REFRESH_TOKEN_EXPIRATION as any,

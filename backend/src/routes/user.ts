@@ -23,13 +23,13 @@ router
   .post("/login", login)
   .post("/signup", signup)
   .put("/update", auth, updateUserInformation)
-  .put("/update/role", auth, updateRole)
+  .put("/update/role", authAdmin, updateRole)
   .get("/verify/adminPanel", auth, haveRightsToAcessToAdminPanel)
   .get("/all", auth, getAllRoleWithWorseRole)
-  .get("/:id/sessions", getUserSessions)
-  .get("/:id/sessions/on/sensor/:idSensor", getUserSessions)
-  .post("/sensors/access", auth, addUsersToSensor)
-  .delete("/sensors/access", auth, removeUserFromSensor)
+  .get("/:id/sessions", auth, getUserSessions)
+  .get("/:id/sessions/on/sensor/:idSensor", auth, getUserSessions)
+  .post("/sensors/access", authAdmin, addUsersToSensor)
+  .delete("/sensors/access", authAdmin, removeUserFromSensor)
   .get("/sensors/access", authAdmin, getUserSensorsAccess)
   .post("/sensors/access/ask", auth, askForSensorAccess);
 

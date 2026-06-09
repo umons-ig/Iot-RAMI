@@ -9,8 +9,8 @@ import {
   NotFoundException,
   ServerErrorException,
 } from "@utils/exceptions";
-import { Role } from "#/user";
-import { decodeToken, getSensorsAvailable } from "@controllers/measurement";
+import { Role, UserPayload } from "#/user";
+import { getSensorsAvailable } from "@controllers/measurement";
 import { discoveredTopics } from "@service/discorverdSensorSevice";
 
 const checkName = (name: string) => {
@@ -189,13 +189,12 @@ const getSensor = async (req: Request, res: Response) => {
     nameString = name.toString();
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailableId: string[] = [];
   let sensorsAvailableName: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailableId = isAdmin ? [] : await getSensorsAvailable(decodedToken);
     sensorsAvailableName = isAdmin
@@ -303,12 +302,11 @@ const updateSensor = async (req: Request, res: Response) => {
     return res.status(400).json(error);
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailableId: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailableId = isAdmin ? [] : await getSensorsAvailable(decodedToken);
   } catch (e) {
@@ -369,12 +367,11 @@ const deleteSensor = async (req: Request, res: Response) => {
     return res.status(400).json(error);
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailableId: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailableId = isAdmin ? [] : await getSensorsAvailable(decodedToken);
   } catch (e) {
