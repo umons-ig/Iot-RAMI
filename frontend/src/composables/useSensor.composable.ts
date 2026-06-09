@@ -1,8 +1,8 @@
 import { ref, computed } from "vue"
 import type { Sensor } from "#/sensor"
 import { useAxios } from "@/composables/useAxios.composable"
+import { useSocket } from "@/composables/useSocket.composable"
 import { EventTypes, handleEvent } from "@/composables/useUser.composable"
-import { io } from "socket.io-client"
 
 /******************************************* ROUTES PATHS & INTERFACE **********************************************/
 
@@ -34,6 +34,7 @@ export enum SensorState {
 
 export const useSensor = (sensorName: string | undefined) => {
 	const { axios } = useAxios()
+	const { createSocket } = useSocket()
 
 	// **************************************************** ATTRIBUTES ****************************************************
 	// *************************** [ATTRIBUTE]  SENSOR STATUS
@@ -166,7 +167,7 @@ export const useSensor = (sensorName: string | undefined) => {
 	}
 
 	const listenToSensorStatus = () => {
-		const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3000")
+		const socket = createSocket()
 		socket.on("sensor-status", (data: { sensorName: string; status: SensorState }) => {
 			if (data.sensorName === sensorName) {
 				status.value = data.status

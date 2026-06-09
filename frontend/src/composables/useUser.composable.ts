@@ -1,3 +1,4 @@
+import { ref } from "vue"
 import type { User, UserIsConnected, UserLoginBody, UserMailRole, UserSignup } from "#/user"
 import { UserFields, Role, Sex } from "#/user"
 import { useAxios } from "@/composables/useAxios.composable"
@@ -9,6 +10,14 @@ interface loginReturn {
 	valid: boolean
 	error: Error | null
 }
+
+interface SubmitResult {
+	valid: boolean
+	redirectTo: string | null
+}
+
+// État d'erreur réactif partagé, affiché dans les composants au lieu d'utiliser alert()
+const submitError = ref<string | null>(null)
 
 /******************************************* ROUTES PATHS & INTERFACE **********************************************/
 
@@ -39,10 +48,6 @@ const EventTypes = {
 	SENSOR_SELECTED_FOR_CREATING_SESSION: "sensor.create.session",
 	// for session
 	SESSION_SELECTED: "session.selected",
-	SESSION_STARTED: "session.started",
-	SESSION_ENDED: "session.ended",
-	// for displaying a session graphique
-	SESSION_SELECTED_FOR_DISPLAYING_GRAPH: "senssion.get.data",
 }
 
 // *************************** [METHOD] DEFINE USER EVENT TYPE (trigger event that others can listen to)
@@ -331,46 +336,45 @@ const useUser = () => {
 
 	const errorHandler = (error: Error | null) => {
 		if (!error) return
-		alert(error.message)
+		submitError.value = error.message
 	}
 
-	const handleResponse = (response: loginReturn, _alertMessage: string, locationPath: string) => {
+	const handleResponse = (response: loginReturn, redirectTo: string): SubmitResult => {
 		if (response.valid) {
-			location.href = locationPath // redirect to home page
-		} else {
-			errorHandler(response.error) // display error message
+			submitError.value = null
+			return { valid: true, redirectTo } // le composant gère la navigation via router.push
 		}
+		errorHandler(response.error) // renseigne l'état d'erreur réactif
+		return { valid: false, redirectTo: null }
 	}
 
-	const submitFormLogin = async (userLoginBody: UserLoginBody) => {
+	const submitFormLogin = async (userLoginBody: UserLoginBody): Promise<SubmitResult> => {
 		const user = (await login(userLoginBody)) as loginReturn
-		handleResponse(user, "You are logged in", "/home")
+		return handleResponse(user, "/home")
 	}
 
-	const submitFormSignup = async (userLoginBody: UserSignup) => {
+	const submitFormSignup = async (userLoginBody: UserSignup): Promise<SubmitResult> => {
 		const user = (await signup(userLoginBody)) as loginReturn
-		handleResponse(user, "You are signed up", "/home")
+		return handleResponse(user, "/home")
 	}
 
-	const submitFormUserUpdatedInformation = async (userInfo: UserLoginBody) => {
+	const submitFormUserUpdatedInformation = async (userInfo: UserLoginBody): Promise<SubmitResult> => {
 		const userUpdated = (await updateUserInformation(userInfo)) as loginReturn
-		handleResponse(userUpdated, "Your information has been updated", "/home")
+		return handleResponse(userUpdated, "/home")
 	}
 
-	const submitForm = async (userFormBody: unknown, formName: string) => {
+	const submitForm = async (userFormBody: unknown, formName: string): Promise<SubmitResult> => {
+		submitError.value = null
 		switch (formName) {
 			case "login":
-				await submitFormLogin(userFormBody as unknown as UserLoginBody)
-				break
+				return submitFormLogin(userFormBody as unknown as UserLoginBody)
 			case "signup":
-				await submitFormSignup(userFormBody as unknown as UserSignup)
-				break
+				return submitFormSignup(userFormBody as unknown as UserSignup)
 			case "userUpdate":
-				await submitFormUserUpdatedInformation(userFormBody as unknown as UserLoginBody)
-				break
+				return submitFormUserUpdatedInformation(userFormBody as unknown as UserLoginBody)
 			default:
-				alert("Invalid form name")
-				break
+				submitError.value = "Invalid form name"
+				return { valid: false, redirectTo: null }
 		}
 	}
 
@@ -384,6 +388,7 @@ const useUser = () => {
 		canAccessAdminPanel,
 		validateForm,
 		submitForm,
+		submitError,
 	}
 }
 

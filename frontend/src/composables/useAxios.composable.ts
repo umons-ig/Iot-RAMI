@@ -48,7 +48,7 @@ _axios.interceptors.response.use(
 			} catch (_refreshError) {
 				// Le refresh a échoué → session expirée, on déconnecte
 				localStorage.clear()
-				window.location.href = "/login"
+				window.location.href = "/"
 				return Promise.reject(_refreshError)
 			} finally {
 				isRefreshing = false

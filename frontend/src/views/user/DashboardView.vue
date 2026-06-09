@@ -189,8 +189,13 @@
 	}
 
 	@keyframes label-blink {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0;
+		}
 	}
 
 	.greeting-name {
@@ -212,8 +217,13 @@
 	}
 
 	@keyframes cursor-blink {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0;
+		}
 	}
 
 	.greeting-line {
@@ -225,19 +235,23 @@
 	}
 
 	.greeting-line::after {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: -100%;
 		width: 60%;
 		height: 100%;
-		background: linear-gradient(to right, transparent, rgba(255,159,10,0.8), transparent);
+		background: linear-gradient(to right, transparent, rgba(255, 159, 10, 0.8), transparent);
 		animation: line-scan 3s ease-in-out infinite 0.5s;
 	}
 
 	@keyframes line-scan {
-		0% { left: -60%; }
-		100% { left: 160%; }
+		0% {
+			left: -60%;
+		}
+		100% {
+			left: 160%;
+		}
 	}
 
 	/* Stats */
@@ -261,7 +275,7 @@
 	}
 
 	.stat-card::before {
-		content: '';
+		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
@@ -279,8 +293,14 @@
 	}
 
 	@keyframes live-bar {
-		0%, 100% { opacity: 0.5; }
-		50% { opacity: 1; box-shadow: 0 0 8px var(--color-success); }
+		0%,
+		100% {
+			opacity: 0.5;
+		}
+		50% {
+			opacity: 1;
+			box-shadow: 0 0 8px var(--color-success);
+		}
 	}
 
 	.stat-card--link {
@@ -353,7 +373,7 @@
 	}
 
 	.section-header::before {
-		content: '';
+		content: "";
 		position: absolute;
 		left: 0;
 		top: 0;

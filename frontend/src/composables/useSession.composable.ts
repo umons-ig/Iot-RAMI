@@ -1,6 +1,6 @@
 import { ref } from "vue"
 import { useAxios } from "@/composables/useAxios.composable"
-import { io } from "socket.io-client"
+import { useSocket } from "@/composables/useSocket.composable"
 import type { Session } from "#/session"
 import { UserFields, EventTypes, handleEvent } from "@/composables/useUser.composable"
 import type { ChartData, ChartDataset } from "chart.js"
@@ -116,6 +116,7 @@ const useDistributionSessionBySensor = () => {
 
 const useSession = () => {
 	const { axios } = useAxios()
+	const { createSocket } = useSocket()
 
 	// **************************************************** ATTRIBUTES ****************************************************
 	// *************************** [ATTRIBUTE]  LIST OF SESSIONS AND SELECTED SESSION
@@ -250,7 +251,7 @@ const useSession = () => {
 			socketClient.value = null
 		}
 		const token = localStorage.getItem(UserFields.TOKEN)
-		const socket = io(import.meta.env.VITE_SOCKET_URL)
+		const socket = createSocket()
 		socketClient.value = socket
 		socket.emit("join-session", { topic, token })
 		socket.on("new-data", (data: any) => {

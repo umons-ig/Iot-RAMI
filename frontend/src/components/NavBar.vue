@@ -229,7 +229,7 @@
 		font-weight: 900;
 		color: var(--color-primary);
 		letter-spacing: 0.12em;
-		text-shadow: 0 0 24px var(--color-primary-glow), 0 0 2px rgba(255,159,10,0.4);
+		text-shadow: 0 0 24px var(--color-primary-glow), 0 0 2px rgba(255, 159, 10, 0.4);
 		line-height: 1;
 	}
 

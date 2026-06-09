@@ -61,6 +61,13 @@
 						</div>
 					</div>
 
+					<div
+						v-if="submitError"
+						class="error-message form-error">
+						<span class="error-icon">▲</span>
+						{{ submitError }}
+					</div>
+
 					<div class="input-row submit-row">
 						<button
 							type="submit"
@@ -89,6 +96,8 @@
 	import { useUser } from "@/composables/useUser.composable"
 	import type { FormField } from "@/helpers/FormBuilder"
 
+	const { submitError } = useUser()
+
 	export default defineComponent({
 		name: "FormView",
 		props: {
@@ -104,6 +113,7 @@
 			return {
 				formData: {} as Record<string, string>,
 				errors: {} as Record<string, string>,
+				submitError,
 			}
 		},
 		created() {
@@ -123,7 +133,10 @@
 					return
 				}
 
-				await submitForm(this.formData, this.formName)
+				const result = await submitForm(this.formData, this.formName)
+				if (result.valid && result.redirectTo) {
+					this.$router.push(result.redirectTo)
+				}
 			},
 			isInputField(type: string): type is "text" | "password" | "date" | "email" {
 				return ["text", "password", "date", "email"].includes(type)
@@ -148,7 +161,7 @@
 		border: 1px solid var(--color-border-bright);
 		padding: 2px;
 		position: relative;
-		box-shadow: 0 0 60px var(--color-primary-glow), 0 0 120px rgba(255,159,10,0.04);
+		box-shadow: 0 0 60px var(--color-primary-glow), 0 0 120px rgba(255, 159, 10, 0.04);
 	}
 
 	/* Coins décoratifs */
@@ -193,14 +206,20 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		line-height: 1;
-		text-shadow: 0 0 30px var(--color-primary-glow), 0 0 60px rgba(255,159,10,0.15);
+		text-shadow: 0 0 30px var(--color-primary-glow), 0 0 60px rgba(255, 159, 10, 0.15);
 		margin-bottom: 4px;
 		animation: title-fade-in 0.4s ease-out both;
 	}
 
 	@keyframes title-fade-in {
-		from { opacity: 0; transform: translateY(-6px); }
-		to { opacity: 1; transform: translateY(0); }
+		from {
+			opacity: 0;
+			transform: translateY(-6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.form-subtitle {
@@ -290,6 +309,14 @@
 		font-size: 0.6rem;
 	}
 
+	.form-error {
+		margin: 0.75rem 0 0.25rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--color-danger);
+		background: var(--color-overlay);
+		font-size: 0.72rem;
+	}
+
 	.readonly-message {
 		margin-top: 4px;
 		color: var(--color-text-muted);
@@ -322,10 +349,10 @@
 	}
 
 	.submit-button::after {
-		content: '';
+		content: "";
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+		background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.15) 50%, transparent 60%);
 		transform: translateX(-100%);
 		transition: transform 0.35s ease;
 	}

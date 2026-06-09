@@ -108,7 +108,7 @@ router.beforeEach(async (to, from, next) => {
 		cleanUserLocalStorage()
 		return next("/")
 	}
-	if (token && expires_at < Date.now().toString()) {
+	if (token && Number(expires_at) < Date.now()) {
 		// If the token is expired, clean the local storage and redirect to log in
 		cleanUserLocalStorage()
 		return next("/")

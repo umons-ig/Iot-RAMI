@@ -124,7 +124,7 @@ describe("useAxios", () => {
 			expect(localStorage.getItem("token")).toBe("new-token")
 		})
 
-		it("should redirect to /login and clear localStorage if refresh fails", async () => {
+		it("should redirect to / and clear localStorage if refresh fails", async () => {
 			Object.defineProperty(window, "location", {
 				writable: true,
 				value: { href: "" },
@@ -137,7 +137,7 @@ describe("useAxios", () => {
 
 			await handlers.responseError!(error).catch(() => {})
 
-			expect(window.location.href).toBe("/login")
+			expect(window.location.href).toBe("/")
 			expect(localStorage.getItem("token")).toBeNull()
 		})
 	})

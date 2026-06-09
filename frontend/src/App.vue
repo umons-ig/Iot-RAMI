@@ -29,9 +29,7 @@
 		padding: 2rem 2.5rem;
 		overflow-y: auto;
 		background-color: transparent;
-		background-image:
-			radial-gradient(ellipse 100% 50% at 50% 0%, var(--color-primary-glow) 0%, transparent 65%),
-			linear-gradient(var(--color-primary-dim) 1px, transparent 1px),
+		background-image: radial-gradient(ellipse 100% 50% at 50% 0%, var(--color-primary-glow) 0%, transparent 65%), linear-gradient(var(--color-primary-dim) 1px, transparent 1px),
 			linear-gradient(90deg, var(--color-primary-dim) 1px, transparent 1px);
 		background-size: 100% 100%, 40px 40px, 40px 40px;
 	}
