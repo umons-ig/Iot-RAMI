@@ -21,6 +21,8 @@ jest.mock("@db/index", () => {
       create: jest.fn(),
       findAll: jest.fn(),
       findOne: jest.fn(),
+      findByPk: jest.fn(),
+      increment: jest.fn(),
       update: jest.fn(),
       destroy: jest.fn(),
     },
@@ -554,7 +556,7 @@ describe("User controller", () => {
       jest.spyOn(jwt, "verify").mockImplementation(() => {
         return {
           id: "id-1",
-          role: "privileged",
+          role: Role.ADMIN,
         } as any;
       });
     });
@@ -709,6 +711,10 @@ describe("User controller", () => {
       expect(response.body.codeError).toBe("user.not.found");
     });
     test("should not update role if updated Role is better than updater role", async () => {
+      // With authAdmin on the route, only admins reach the controller.
+      // The controller still enforces that an admin cannot assign a role
+      // superior to their own (Role.ADMIN is the ceiling, so this test
+      // verifies the middleware now blocks a non-admin caller first).
       const userTest = { ...user };
       userTest.role = Role.ADMIN;
 
@@ -730,11 +736,9 @@ describe("User controller", () => {
         .set("Authorization", `Bearer 1234`)
         .send(userTest);
 
+      // authAdmin blocks non-admin callers before the controller logic runs
       expect(response.statusCode).toBe(401);
-      expect(response.body.message).toBe(
-        "You can't update a user with a better role than you !"
-      );
-      expect(response.body.codeError).toBe("user.role.not.enough.permissions");
+      expect(response.body.codeError).toBe("auth.token.unauthorized");
     });
     test("should return a 401 if there is no payload", async () => {
       const userTest = { ...user };
@@ -744,6 +748,8 @@ describe("User controller", () => {
       findOneMock.mockReturnValueOnce(user);
 
       const verifyMock = jest.fn();
+      // authAdmin calls jwt.verify twice (verifyToken + role check); first
+      // call returns a non-admin role so the middleware blocks immediately.
       verifyMock.mockReturnValueOnce({ id: "id-34", role: Role.REGULAR });
       verifyMock.mockReturnValueOnce(null);
 
@@ -756,8 +762,7 @@ describe("User controller", () => {
         .send(userTest);
 
       expect(response.statusCode).toBe(401);
-      expect(response.body.message).toBe("Unauthorized (invalid token) !");
-      expect(response.body.codeError).toBe("auth.token.invalid");
+      expect(response.body.codeError).toBe("auth.token.unauthorized");
     });
     test("should return a 500 if update user fail", async () => {
       const userTest = { ...user };
@@ -1060,6 +1065,11 @@ describe("User controller", () => {
         userId: mockUserOfUserType.id,
         role: mockUserOfUserType.role,
       });
+      User.findByPk = jest.fn().mockResolvedValue({
+        id: mockUserOfUserType.id,
+        role: mockUserOfUserType.role,
+        refreshTokenVersion: 0,
+      });
       (jwt.sign as jest.Mock).mockReturnValue("new-access-token");
 
       const response = await superTest(app)
@@ -1075,6 +1085,11 @@ describe("User controller", () => {
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: mockUserOfUserType.id,
         role: mockUserOfUserType.role,
+      });
+      User.findByPk = jest.fn().mockResolvedValue({
+        id: mockUserOfUserType.id,
+        role: mockUserOfUserType.role,
+        refreshTokenVersion: 0,
       });
       (jwt.sign as jest.Mock).mockReturnValue("new-token");
 

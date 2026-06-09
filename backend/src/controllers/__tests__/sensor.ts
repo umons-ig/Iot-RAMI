@@ -315,13 +315,12 @@ describe("Sensor controller", () => {
       expect(result.body.codeError).toBe("server.error");
     });
 
-    test("should return a 400 if decode return is null", async () => {
+    test("should return a 401 if the token payload is null", async () => {
+      // The auth middleware now decodes the token and attaches it to req.user.
+      // A null payload is rejected by the middleware with a 401.
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockReturnValue(null);
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockReturnValue(null);
-      jwt.decode = decodeMock;
 
       const findAllMock = jest.fn();
       findAllMock.mockResolvedValue(sensors);
@@ -331,8 +330,8 @@ describe("Sensor controller", () => {
         .get(baseUri)
         .set("Authorization", `Bearer 1234`);
 
-      expect(result.status).toBe(400);
-      expect(result.body.message).toBe("Invalid token !");
+      expect(result.status).toBe(401);
+      expect(result.body.message).toBe("Unauthorized !");
       expect(result.body.codeError).toBe("auth.token.invalid");
     });
 

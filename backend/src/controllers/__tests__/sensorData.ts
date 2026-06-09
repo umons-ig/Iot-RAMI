@@ -115,6 +115,7 @@ describe("SensorData Controller", () => {
 
       expect(sensordata.findAll).toHaveBeenCalledWith({
         where: { idSensor },
+        order: [["time", "ASC"]],
         include: { model: undefined, attributes: ["name"] },
       });
       expect(result).toEqual(mockSensorData);
@@ -138,6 +139,7 @@ describe("SensorData Controller", () => {
             [Op.between]: [time1, time2],
           },
         },
+        order: [["time", "ASC"]],
         include: { model: undefined, attributes: ["name"] },
       });
       expect(result).toEqual(mockSensorData);
