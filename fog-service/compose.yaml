@@ -9,8 +9,36 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
       - KAFKA_BROKERS=${KAFKA_BROKERS}
+      # Outbox store-and-forward (Postgres local)
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=${PG_USER:-fog}
+      - PG_PASSWORD=${PG_PASSWORD:-fog}
+      - PG_DATABASE=${PG_DATABASE:-fog_outbox}
     depends_on:
-      - mosquitto
+      mosquitto:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    container_name: fog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-fog}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-fog}
+      POSTGRES_DB: ${PG_DATABASE:-fog_outbox}
+    volumes:
+      - fog-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
   mosquitto:
     image: eclipse-mosquitto:2.0.20
     restart: always
@@ -42,3 +70,5 @@ services:
       - WATCHTOWER_POLL_INTERVAL=300
       - DOCKER_API_VERSION=1.44
       - WATCHTOWER_CLEANUP=true
+volumes:
+  fog-db-data:

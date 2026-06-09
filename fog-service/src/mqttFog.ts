@@ -1,11 +1,20 @@
 import mqtt, { MqttClient } from "mqtt";
-import { BROKER_INFO, TOPICS, MESSAGE_FIELDS, COMMANDS, BUFFER_CONFIG } from "./constants";
+import {
+  BROKER_INFO,
+  TOPICS,
+  MESSAGE_FIELDS,
+  COMMANDS,
+  BUFFER_CONFIG,
+  OUTBOX_CONFIG,
+} from "./constants";
 import KafkaService from "./kafkaProducer";
+import { Outbox } from "./outbox";
 
 class MqttFog {
   private static instance: MqttFog | undefined;
   private mqttClient!: MqttClient;
   private kafkaService!: KafkaService;
+  private outbox!: Outbox;
   private buffer = new Map<string, any[]>();
   private flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   private flushMaxSize = BUFFER_CONFIG.flushMaxSize;
@@ -15,6 +24,14 @@ class MqttFog {
   private sessionTimers: Map<string, NodeJS.Timeout> = new Map();
   private sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
   private flushInterval: NodeJS.Timeout | undefined;
+  // ─── Store-and-forward (réplicateur outbox → Kafka) ───────────────────────
+  private replicatorIntervalMs = OUTBOX_CONFIG.replicatorIntervalMs;
+  private replicatorBatchSize = OUTBOX_CONFIG.replicatorBatchSize;
+  private retentionDays = OUTBOX_CONFIG.retentionDays;
+  private purgeIntervalMs = OUTBOX_CONFIG.purgeIntervalMs;
+  private replicatorInterval: NodeJS.Timeout | undefined;
+  private purgeInterval: NodeJS.Timeout | undefined;
+  private isReplicating = false;
 
   private constructor() {
     // Constructeur privé pour empêcher l'instanciation directe
@@ -24,19 +41,40 @@ class MqttFog {
       MqttFog.instance = new MqttFog();
       await MqttFog.instance.connectBroker();
       MqttFog.instance.kafkaService = await KafkaService.getInstance();
+      // Outbox durable : créée APRÈS Kafka, démarre le réplicateur + la purge.
+      MqttFog.instance.outbox = new Outbox();
+      await MqttFog.instance.outbox.init();
+      MqttFog.instance.startReplicator();
+      MqttFog.instance.startPurge();
     }
     return MqttFog.instance;
   }
 
   /**
-   * Arrêt propre : flushe tous les buffers en mémoire vers Kafka,
-   * déconnecte le producteur Kafka, puis ferme le client MQTT.
-   * Appelé sur SIGTERM/SIGINT pour éviter la perte des mesures bufferisées.
+   * Arrêt propre : persiste les buffers mémoire restants dans l'outbox (durable),
+   * stoppe les timers, déconnecte Kafka, ferme MQTT, puis ferme la base.
+   * Appelé sur SIGTERM/SIGINT. Les mesures persistées seront répliquées au
+   * prochain démarrage (reprise store-and-forward), donc aucune perte.
    */
   public async shutdown(): Promise<void> {
-    console.log("[FogService] Arrêt en cours — flush des buffers...");
+    console.log("[FogService] Arrêt en cours — persistance des buffers vers l'outbox...");
 
-    // 1. Flush de tous les topics en parallèle, sans qu'une erreur par topic ne bloque les autres
+    // Stopper le réplicateur, la purge et le flush périodique d'abord
+    if (this.replicatorInterval) {
+      clearInterval(this.replicatorInterval);
+      this.replicatorInterval = undefined;
+    }
+    if (this.purgeInterval) {
+      clearInterval(this.purgeInterval);
+      this.purgeInterval = undefined;
+    }
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval);
+      this.flushInterval = undefined;
+    }
+
+    // 1. Flush mémoire → outbox (persistance durable) en parallèle, sans qu'une
+    //    erreur par topic ne bloque les autres
     const topics = [...this.buffer.keys()];
     await Promise.all(
       topics.map((topic) =>
@@ -46,11 +84,7 @@ class MqttFog {
       ),
     );
 
-    // Stopper le flush périodique et les timers résiduels
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval);
-      this.flushInterval = undefined;
-    }
+    // Timers résiduels
     this.sensorTimeouts.forEach((t) => clearTimeout(t));
     this.sensorTimeouts.clear();
     this.sessionTimers.forEach((t) => clearTimeout(t));
@@ -75,6 +109,11 @@ class MqttFog {
         resolve();
       });
     });
+
+    // 4. Fermeture de la base (les pending survivront et seront répliqués au reboot)
+    if (this.outbox) {
+      await this.outbox.close();
+    }
 
     console.log("[FogService] Arrêt terminé");
   }
@@ -147,14 +186,9 @@ class MqttFog {
     if (!this.buffer.has(topic)) {
       this.buffer.set(topic, []);
     }
-    try {
-      await this.kafkaService.publishBatchSensorData("sensor-data", [
-        { type: "start", sensorTopic: topic, timestamp: Date.now() },
-      ]);
-      console.log(`▶️ [Kafka] START envoyé pour ${topic}`);
-    } catch (error) {
-      console.error(`❌ [startSession] Erreur Kafka:`, error);
-    }
+    // Write-ahead : on persiste l'événement START dans l'outbox AVANT l'ACK
+    // capteur. Si l'enqueue échoue, l'erreur remonte → handleStart n'ACK pas.
+    await this.outbox.enqueue({ type: "start", sensorTopic: topic, timestamp: Date.now() });
     clearTimeout(this.sessionTimers.get(topic));
     const timer = setTimeout(() => {
       console.log(`🔄 [Session] Durée max atteinte pour ${topic} — rotation de session`);
@@ -171,15 +205,9 @@ class MqttFog {
   private async handleStop(topic: string): Promise<void> {
     clearTimeout(this.sessionTimers.get(topic));
     this.sessionTimers.delete(topic);
+    // Persiste d'abord le reste des mesures bufferisées, puis l'événement STOP.
     await this.flushBuffer(topic);
-    try {
-      await this.kafkaService.publishBatchSensorData("sensor-data", [
-        { type: "stop", sensorTopic: topic, timestamp: Date.now() },
-      ]);
-      console.log(`⏹️ [Kafka] STOP envoyé pour ${topic}`);
-    } catch (error) {
-      console.error(`❌ [handleStop] Erreur Kafka:`, error);
-    }
+    await this.outbox.enqueue({ type: "stop", sensorTopic: topic, timestamp: Date.now() });
     this.buffer.delete(topic);
   }
   private sendAck(topic: string): void {
@@ -216,13 +244,69 @@ class MqttFog {
           sensorTopic: topic,
           measures: dataArray,
         };
-        await this.kafkaService.publishBatchSensorData("sensor-data", [batch]);
+        // Écriture LOCALE durable (rapide) — la réplication vers Kafka est
+        // découplée (cf. startReplicator). On ne perd jamais une mesure ACK'ée.
+        await this.outbox.enqueue(batch);
         this.buffer.set(topic, []);
         this.dropWarnedTopics.delete(topic);
       } catch (error) {
-        console.error(`❌ [flushBuffer] Erreur Kafka pour ${topic}:`, error);
+        console.error(`❌ [flushBuffer] Erreur outbox pour ${topic}:`, error);
       }
     }
+  }
+
+  /**
+   * Réplicateur store-and-forward : lit les lignes pending de l'outbox par lots
+   * et les publie vers Kafka. En cas de succès, marque les lignes synced ; en cas
+   * d'échec Kafka, ne marque rien (re-tenté au prochain tick).
+   */
+  private startReplicator(): void {
+    if (this.replicatorInterval) return;
+    this.replicatorInterval = setInterval(() => {
+      void this.replicate();
+    }, this.replicatorIntervalMs);
+  }
+
+  private async replicate(): Promise<void> {
+    if (this.isReplicating) return;
+    this.isReplicating = true;
+    try {
+      const rows = await this.outbox.pullPending(this.replicatorBatchSize);
+      if (rows.length === 0) return;
+      try {
+        await this.kafkaService.publishBatchSensorData(
+          "sensor-data",
+          rows.map((r) => r.payload),
+        );
+        // Succès Kafka → on marque synced
+        await this.outbox.markSynced(rows.map((r) => r.id));
+      } catch (error) {
+        // Échec Kafka : on NE marque PAS — les lignes restent pending et seront
+        // re-tentées au prochain tick (anti-perte).
+        console.error("❌ [Replicator] Échec publication Kafka — re-tentative au prochain tick:", error);
+      }
+    } catch (error) {
+      console.error("❌ [Replicator] Erreur outbox:", error);
+    } finally {
+      this.isReplicating = false;
+    }
+  }
+
+  /**
+   * Purge périodique des lignes synced plus vieilles que la rétention.
+   */
+  private startPurge(): void {
+    if (this.purgeInterval) return;
+    this.purgeInterval = setInterval(() => {
+      this.outbox
+        .purgeSynced(this.retentionDays)
+        .then((count) => {
+          if (count > 0) {
+            console.log(`🧹 [Outbox] Purge: ${count} ligne(s) synced supprimée(s)`);
+          }
+        })
+        .catch((e) => console.error("❌ [Purge] Erreur:", e));
+    }, this.purgeIntervalMs);
   }
   private startFlushInterval(): void {
     if (this.flushInterval) return;

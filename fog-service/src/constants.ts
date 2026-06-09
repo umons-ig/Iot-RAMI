@@ -34,3 +34,24 @@ export const BUFFER_CONFIG = {
   maxBufferSize: parseInt(process.env.MAX_BUFFER_SIZE ?? "500"),
   sessionMaxDurationMs: parseInt(process.env.SESSION_MAX_DURATION_MS ?? "3600000"),
 };
+
+// ─── Postgres local (outbox store-and-forward) ────────────────────────────────
+export const PG_CONFIG = {
+  host: process.env.PG_HOST ?? "localhost",
+  port: parseInt(process.env.PG_PORT ?? "5432"),
+  user: process.env.PG_USER ?? "fog",
+  password: process.env.PG_PASSWORD ?? "fog",
+  database: process.env.PG_DATABASE ?? "fog_outbox",
+};
+
+// ─── Outbox / réplicateur store-and-forward ───────────────────────────────────
+export const OUTBOX_CONFIG = {
+  // Intervalle entre deux tentatives de réplication vers Kafka (ms)
+  replicatorIntervalMs: parseInt(process.env.OUTBOX_REPLICATOR_INTERVAL_MS ?? "500"),
+  // Nombre max de lignes pending lues/publiées par tick
+  replicatorBatchSize: parseInt(process.env.OUTBOX_BATCH_SIZE ?? "200"),
+  // Durée de conservation des lignes synced avant purge (jours)
+  retentionDays: parseInt(process.env.OUTBOX_RETENTION_DAYS ?? "7"),
+  // Intervalle entre deux purges (ms, défaut 1h)
+  purgeIntervalMs: parseInt(process.env.OUTBOX_PURGE_INTERVAL_MS ?? "3600000"),
+};
