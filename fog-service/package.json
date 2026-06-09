@@ -5,10 +5,13 @@
   "license": "ISC",
   "author": "",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:check": "eslint \"src/**/*.ts\"",
+    "format": "eslint \"src/**/*.ts\" --fix",
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
@@ -16,8 +19,7 @@
   "dependencies": {
     "dotenv": "^17.3.1",
     "kafkajs": "^2.2.4",
-    "mqtt": "^5.15.0",
-    "pretier": "^0.0.1"
+    "mqtt": "^5.15.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

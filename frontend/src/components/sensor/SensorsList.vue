@@ -83,9 +83,9 @@
 
 <script lang="ts">
 	import { defineComponent, onMounted, onUnmounted, computed, reactive } from "vue"
-	import { io } from "socket.io-client"
 	import SensorCard from "@/components/sensor/SensorCard.vue"
 	import { useSensor, SensorState } from "@/composables/useSensor.composable"
+	import { useSocket } from "@/composables/useSocket.composable"
 
 	const PAGE_LIMIT = 20
 
@@ -104,11 +104,12 @@
 		},
 		setup(props) {
 			const { sensors, selectedSensor, fetchSensors, getAllSensorsStatus, handleSensorSelect, currentPage, totalPages, totalSensors } = useSensor(undefined)
+			const { createSocket } = useSocket()
 
 			const sensorStatuses = reactive<Record<string, SensorState>>({})
 
 			// 1 seule connexion Socket.io pour toute la liste
-			const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3000")
+			const socket = createSocket()
 			socket.on("sensor-status", (data: { sensorName: string; status: SensorState }) => {
 				sensorStatuses[data.sensorName] = data.status
 			})

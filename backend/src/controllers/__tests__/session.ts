@@ -27,6 +27,12 @@ jest.mock("@db/index", () => ({
   },
 }));
 
+// Bypass auth middlewares so controller logic is tested in isolation
+jest.mock("@middlewares/auth", () => ({
+  auth: (_req: any, _res: any, next: () => void) => next(),
+  authAdmin: (_req: any, _res: any, next: () => void) => next(),
+}));
+
 // On cast DB en any pour pouvoir utiliser .mockResolvedValue sur ses propriétés
 const mockDB = db as any;
 

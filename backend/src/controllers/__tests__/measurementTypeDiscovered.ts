@@ -58,6 +58,12 @@ jest.mock("@db/index", () => ({
   },
 }));
 
+// Bypass auth middlewares so controller logic is tested in isolation
+jest.mock("@middlewares/auth", () => ({
+  auth: (_req: any, _res: any, next: () => void) => next(),
+  authAdmin: (_req: any, _res: any, next: () => void) => next(),
+}));
+
 const baseUri = "/api/v1/measurementTypes";
 
 // ── GET /discovered ─────────────────────────────────────────────────────────

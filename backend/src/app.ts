@@ -2,6 +2,8 @@ import "dotenv/config";
 import express, { Express } from "express";
 import swaggerUi from "swagger-ui-express";
 import cookieparser from "cookie-parser";
+import helmet from "helmet";
+import cors from "cors";
 import { openApiDocumentation } from "@docs/index";
 
 import { routes } from "@routes/routes";
@@ -15,34 +17,31 @@ const app: Express = express();
 app.use(globalLimiter);
 app.use("/api/v1/auth", authLimiter);
 app.use(metricsMiddleware);
-app.use(express.json({ limit: "10mb" }));
+app.use(helmet());
 app.use(
-  express.urlencoded({ limit: "10mb", extended: true, parameterLimit: 50000 })
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:8080",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Accept",
+      "Content-Type",
+      "Authorization",
+    ],
+  })
+);
+app.use(express.json({ limit: "256kb" }));
+app.use(
+  express.urlencoded({ limit: "256kb", extended: true, parameterLimit: 50000 })
 );
 app.use(cookieparser());
 
-app.use(
-  (
-    _req: { method: string; url: string; body: any },
-    res: { setHeader: (arg0: string, arg1: string) => void },
-    next: () => void
-  ) => {
-    res.setHeader(
-      "Access-Control-Allow-Origin",
-      process.env.FRONTEND_URL || "http://localhost:8080"
-    );
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content, Accept, Content-Type, Authorization"
-    );
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-    );
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    next();
-  }
-);
+// Liveness/readiness probe (utilisé par les healthchecks Docker, non authentifié)
+app.get("/health", (_req, res) => {
+  return res.status(200).json({ status: "ok" });
+});
 
 const baseUri = "/api/v1";
 

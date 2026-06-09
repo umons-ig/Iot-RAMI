@@ -12,7 +12,6 @@ import {
   ServerErrorException,
 } from "@utils/exceptions";
 import { MeasurementModel } from "#/measurement";
-import jwt from "jsonwebtoken";
 import { Role, UserPayload } from "#/user";
 import { FindAttributeOptions, Op, OrderItem } from "sequelize";
 import { Status } from "#/sensor";
@@ -171,21 +170,6 @@ const getSample = ({
   return sampleTmp;
 };
 
-const decodeToken = async (token: string | undefined) => {
-  if (!token) {
-    throw new BadRequestException(
-      "No token provided !",
-      "auth.token.not.found"
-    );
-  }
-
-  const decodedToken = (await jwt.decode(token)) as UserPayload;
-  if (!decodedToken) {
-    throw new BadRequestException("Invalid token !", "auth.token.invalid");
-  }
-  return decodedToken;
-};
-
 const getSensorsAvailable = async (decodedToken: UserPayload, name = false) => {
   const result = await UserSensorAccess.findAll({
     where: {
@@ -216,12 +200,11 @@ const getMeasurement = async (req: Request, res: Response) => {
   const { number, date, type, sensor, sample, average } = req.query;
   const { id } = req.params;
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensors: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensors = isAdmin ? [] : await getSensorsAvailable(decodedToken, true);
   } catch (e) {
@@ -739,12 +722,11 @@ const createMeasurement = async (req: Request, res: Response) => {
     }
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailable: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailable = isAdmin ? [] : await getSensorsAvailable(decodedToken);
   } catch (e) {
@@ -817,12 +799,11 @@ const updateMeasurement = async (req: Request, res: Response) => {
     }
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailable: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailable = isAdmin ? [] : await getSensorsAvailable(decodedToken);
   } catch (e) {
@@ -892,12 +873,11 @@ const deleteMeasurement = async (req: Request, res: Response) => {
       );
   }
 
-  const token = req.headers.authorization?.split(" ")[1]; // extract token from header bearer
+  const decodedToken = req.user as UserPayload;
   let isAdmin = false;
   let sensorsAvailable: string[] = [];
 
   try {
-    const decodedToken = await decodeToken(token);
     isAdmin = decodedToken.role === Role.ADMIN;
     sensorsAvailable = isAdmin ? [] : await getSensorsAvailable(decodedToken);
   } catch (e) {
@@ -962,5 +942,4 @@ export {
   getSample,
   formatKey,
   getSensorsAvailable,
-  decodeToken,
 };

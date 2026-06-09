@@ -6,16 +6,15 @@ import {
   getMeasurement,
   updateMeasurement,
 } from "@controllers/measurement";
-//import { auth } from "@middlewares/auth";
+import { auth } from "@middlewares/auth";
 
 const router = express.Router();
 
 router
-  // Ajouté de auth ici, en 2-1-2 ????
-  .get("/:id?", getMeasurement)
-  .post("/", createMeasurement)
-  .post("/bulk", createMeasurements)
-  .put("/:id", updateMeasurement)
-  .delete("/:id", deleteMeasurement);
+  .get("/:id?", auth, getMeasurement)
+  .post("/", auth, createMeasurement)
+  .post("/bulk", auth, createMeasurements)
+  .put("/:id", auth, updateMeasurement)
+  .delete("/:id", auth, deleteMeasurement);
 
 export { router as measurementRoutes };

@@ -148,20 +148,25 @@ const createSensorData = async (
 const getSensorDataWithinTimeRange = async (
   idSensor: string,
   time1?: Date,
-  time2?: Date
+  time2?: Date,
+  limit?: number // undefined = pas de limite (export CSV uniquement)
 ) => {
   // Build the where clause using the utility function.
   const whereClause = buildSensorDataWhereClause(idSensor, time1, time2);
 
+  const query: any = {
+    where: whereClause,
+    order: [["time", "ASC"]],
+    include: {
+      model: MeasurementType,
+      attributes: ["name"],
+    },
+  };
+  if (limit !== undefined) query.limit = limit;
+
   try {
     // Query the SensorData table with the constructed where clause.
-    const sensorData = await sensordata.findAll({
-      where: whereClause,
-      include: {
-        model: MeasurementType,
-        attributes: ["name"],
-      },
-    });
+    const sensorData = await sensordata.findAll(query);
 
     // Return the array of sensor data objects.
     return sensorData;

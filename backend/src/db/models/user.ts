@@ -54,6 +54,11 @@ const defineUserModel = (sequelize: Sequelize, DataTypes: any): UserStatic => {
         type: DataTypes.ENUM(Role.ADMIN, Role.PRIVILEGED, Role.REGULAR),
         defaultValue: Role.REGULAR,
       },
+      refreshTokenVersion: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        allowNull: false,
+      },
     },
     {
       timestamps: false,

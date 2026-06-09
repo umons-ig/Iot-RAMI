@@ -606,10 +606,11 @@ describe("Auxiliary functions", () => {
   });
 
   describe("askForSensorAccess", () => {
-    test("should return 400 if there is no user or no sensor", async () => {
+    test("should return 400 if there is no requester or no sensor", async () => {
+      // No req.user (identity now comes from the authenticated user, not the body)
       const req = {
         body: {
-          user: "someUser",
+          sensor: "someSensor",
         },
       } as Request;
 
@@ -629,20 +630,16 @@ describe("Auxiliary functions", () => {
     });
     test("should return 500 if there is no id", async () => {
       const req = {
+        user: { userId: "someId" },
         body: {
-          user: "someUser",
           sensor: "someSensor",
         },
-      } as Request;
+      } as unknown as Request;
 
       const res = {
         status: jest.fn(() => res),
         json: jest.fn(),
       } as unknown as Response;
-
-      const mockFindOneUser = jest.fn();
-      mockFindOneUser.mockResolvedValue({});
-      User.findOne = mockFindOneUser;
 
       const mockFindOneSensor = jest.fn();
       mockFindOneSensor.mockResolvedValue({});
@@ -656,20 +653,16 @@ describe("Auxiliary functions", () => {
     });
     test("should return 400 if user already has ask for access", async () => {
       const req = {
+        user: { userId: "someId" },
         body: {
-          user: "someUser",
           sensor: "someSensor",
         },
-      } as Request;
+      } as unknown as Request;
 
       const res = {
         status: jest.fn(() => res),
         json: jest.fn(),
       } as unknown as Response;
-
-      const mockFindOneUser = jest.fn();
-      mockFindOneUser.mockResolvedValue({ dataValues: { id: "someId" } });
-      User.findOne = mockFindOneUser;
 
       const mockFindOneSensor = jest.fn();
       mockFindOneSensor.mockResolvedValue({ dataValues: { id: "someId" } });
@@ -690,20 +683,16 @@ describe("Auxiliary functions", () => {
     });
     test("should return 500 if create return nothing", async () => {
       const req = {
+        user: { userId: "someId" },
         body: {
-          user: "someUser",
           sensor: "someSensor",
         },
-      } as Request;
+      } as unknown as Request;
 
       const res = {
         status: jest.fn(() => res),
         json: jest.fn(),
       } as unknown as Response;
-
-      const mockFindOneUser = jest.fn();
-      mockFindOneUser.mockResolvedValue({ dataValues: { id: "someId" } });
-      User.findOne = mockFindOneUser;
 
       const mockFindOneSensor = jest.fn();
       mockFindOneSensor.mockResolvedValue({ dataValues: { id: "someId" } });
@@ -725,20 +714,16 @@ describe("Auxiliary functions", () => {
     });
     test("should return 201 if create return something", async () => {
       const req = {
+        user: { userId: "someId" },
         body: {
-          user: "someUser",
           sensor: "someSensor",
         },
-      } as Request;
+      } as unknown as Request;
 
       const res = {
         status: jest.fn(() => res),
         json: jest.fn(),
       } as unknown as Response;
-
-      const mockFindOneUser = jest.fn();
-      mockFindOneUser.mockResolvedValue({ dataValues: { id: "someId" } });
-      User.findOne = mockFindOneUser;
 
       const mockFindOneSensor = jest.fn();
       mockFindOneSensor.mockResolvedValue({ dataValues: { id: "someId" } });
@@ -758,11 +743,11 @@ describe("Auxiliary functions", () => {
     });
     test("should return 404 if sensor not found", async () => {
       const req = {
+        user: { userId: "someId" },
         body: {
-          user: "someUser",
           sensor: "someSensor",
         },
-      } as Request;
+      } as unknown as Request;
 
       const res = {
         status: jest.fn(() => res),

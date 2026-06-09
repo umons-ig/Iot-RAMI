@@ -96,7 +96,7 @@
 							max: max.toFixed(2),
 						}
 					})
-					.filter(Boolean)
+					.filter((stat): stat is { label: string; avg: string; min: string; max: string } => stat !== null)
 			})
 
 			provide("title", "HISTORIQUE SESSION")

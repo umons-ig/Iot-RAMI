@@ -245,7 +245,8 @@ const getSessionData = async (req: Request, res: Response) => {
         : await getSensorDataWithinTimeRange(
             sensor.dataValues.id,
             startTime,
-            endTime
+            endTime,
+            10_000
           );
 
     return res.status(200).json(sensorData);

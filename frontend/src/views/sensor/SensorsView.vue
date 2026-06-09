@@ -71,7 +71,7 @@
 	}
 
 	.view-header::after {
-		content: '';
+		content: "";
 		position: absolute;
 		bottom: 0;
 		left: 0;

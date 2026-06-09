@@ -154,6 +154,15 @@ const measurementsJson = [
 ];
 
 describe("Measurement controller", () => {
+  beforeEach(() => {
+    // The auth middleware now decodes the JWT via jwt.verify. Because afterEach
+    // resets all mocks (wiping the default implementation), restore a valid
+    // payload here so requests carrying a Bearer token pass the middleware.
+    const defaultPayload = { userId: "id-1", role: "regular", tokenVersion: 0 };
+    (jwt.verify as jest.Mock).mockReturnValue(defaultPayload);
+    (jwt.decode as jest.Mock).mockReturnValue(defaultPayload);
+  });
+
   afterEach(() => {
     jest.resetAllMocks();
   });
@@ -162,7 +171,10 @@ describe("Measurement controller", () => {
     describe("One measurement", () => {
       test("should return a 400 if no date is provided", async () => {
         const body = { date: "" };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Date is required");
@@ -171,7 +183,10 @@ describe("Measurement controller", () => {
 
       test("should return a 400 if date isn't correct", async () => {
         const body = { date: "22-01-01" };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Date is not valid");
@@ -179,7 +194,10 @@ describe("Measurement controller", () => {
       });
       /*test("should return a 400 if invalid token is provided", async () => {
       const body = { date: "" };
-      const result = await superTest(app).post(baseUri).send(body);
+      const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
       expect(result.status).toBe(400);
       expect(result.body.message).toBe("Invalid token !");
@@ -341,7 +359,10 @@ describe("Measurement controller", () => {
 
       test("should return a 400 if no value is provided", async () => {
         const body = { date: "220101", value: "" };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Value is required");
@@ -376,7 +397,10 @@ describe("Measurement controller", () => {
 
       test("should return a 400 if value isn't correct", async () => {
         const body = { date: "220101", value: "a" };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Value is invalid");
@@ -437,7 +461,10 @@ describe("Measurement controller", () => {
 
       test("should return a 400 if no type is provided", async () => {
         const body = { date: "220101", value: "1", type: "" };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Type is required");
@@ -482,7 +509,10 @@ describe("Measurement controller", () => {
         findOneMock.mockResolvedValueOnce(null);
         MeasurementType.findOne = findOneMock;
 
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(404);
         expect(result.body.message).toBe("Measurement type not found");
@@ -506,13 +536,12 @@ describe("Measurement controller", () => {
       expect(result.body.codeError).toBe("auth.token.invalid");
     });*/
 
-      test("should return a 500 if decode throw an error", async () => {
+      test("should return a 500 if the middleware token verification throws", async () => {
         const verifyMock = jest.fn();
-        verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+        verifyMock.mockImplementation(() => {
+          throw new Error();
+        });
         jwt.verify = verifyMock;
-        const decodeMock = jest.fn();
-        decodeMock.mockRejectedValue(new Error());
-        jwt.decode = decodeMock;
 
         const findOneMock = jest.fn();
         findOneMock.mockResolvedValue({
@@ -537,7 +566,7 @@ describe("Measurement controller", () => {
           .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
-        expect(result.body.message).toBe("Server error");
+        expect(result.body.message).toBe("Server error !");
         expect(result.body.codeError).toBe("server.error");
       });
 
@@ -586,7 +615,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Sensor is required");
@@ -611,7 +643,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -636,7 +671,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -653,7 +691,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -676,7 +717,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "esp32-1",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -701,7 +745,10 @@ describe("Measurement controller", () => {
           type: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
           sensor: "aa9bce42-0bfd-4412-ad24-6372e6a2c139",
         };
-        const result = await superTest(app).post(baseUri).send(body);
+        const result = await superTest(app)
+          .post(baseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(201);
         expect(result.body).toStrictEqual(firstMeasurementJson);
@@ -721,7 +768,10 @@ describe("Measurement controller", () => {
       });
       test("should return a 400 if no measurements are provided", async () => {
         const body = [] as string[];
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Measurements are required");
@@ -729,7 +779,10 @@ describe("Measurement controller", () => {
       });
       test("should return a 400 if measurements are not an array", async () => {
         const body = "test";
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe("Measurements must be an array");
@@ -742,7 +795,10 @@ describe("Measurement controller", () => {
         for (let i = 0; i < 1001; i++) {
           body[i] = measurements[0];
         }
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(400);
         expect(result.body.message).toBe(
@@ -791,7 +847,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = measurementsBulk;
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(201);
         expect(result.body).toStrictEqual(measurementsJson);
@@ -824,7 +883,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = [measurementsBulk[0], measurementsBulk[0]];
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(201);
         expect(result.body).toStrictEqual(measurementsJson);
@@ -863,7 +925,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = measurementsBulk;
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(207);
         expect(result.body.message).toStrictEqual(
@@ -906,7 +971,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = measurementsBulk;
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(207);
         expect(result.body.message).toStrictEqual(
@@ -928,7 +996,10 @@ describe("Measurement controller", () => {
             sensor: measurementsBulk[0].sensor,
           },
         ];
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -948,7 +1019,10 @@ describe("Measurement controller", () => {
             sensor: measurementsBulk[0].sensor,
           },
         ];
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -994,7 +1068,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = measurementsBulk;
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -1040,7 +1117,10 @@ describe("Measurement controller", () => {
         Sensor.findAll = findAllSensor;
 
         const body = measurementsBulk;
-        const result = await superTest(app).post(localBaseUri).send(body);
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(body)
+          .set("Authorization", `Bearer 1234`);
 
         expect(result.status).toBe(500);
         expect(result.body.message).toBe("Server error");
@@ -1305,13 +1385,11 @@ describe("Measurement controller", () => {
       expect(result.body.codeError).toBe("server.error");
     });
 
-    test("should return a 400 if decode return null", async () => {
+    test("should return a 401 if the token payload is null", async () => {
+      // Decoding is now owned by the auth middleware; a null payload is a 401.
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockReturnValue(null);
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockReturnValue(null);
-      jwt.decode = decodeMock;
 
       const findOneMock = jest.fn();
       findOneMock.mockResolvedValue({
@@ -1336,8 +1414,8 @@ describe("Measurement controller", () => {
         .send(body)
         .set("Authorization", `Bearer 1234`);
 
-      expect(result.status).toBe(400);
-      expect(result.body.message).toBe("Invalid token !");
+      expect(result.status).toBe(401);
+      expect(result.body.message).toBe("Unauthorized !");
       expect(result.body.codeError).toBe("auth.token.invalid");
     });
 
@@ -1522,13 +1600,11 @@ describe("Measurement controller", () => {
       expect(result.body).toEqual(firstMeasurementJson);
     });
 
-    test("should return a 400 if decode return null", async () => {
+    test("should return a 401 if the token payload is null", async () => {
+      // Decoding is now owned by the auth middleware; a null payload is a 401.
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockReturnValue(null);
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockReturnValue(null);
-      jwt.decode = decodeMock;
 
       const destroyMock = jest.fn();
       destroyMock.mockResolvedValue(measurements[0]);
@@ -1538,18 +1614,17 @@ describe("Measurement controller", () => {
         .delete(baseUri + "/" + measurements[0].id)
         .set("Authorization", `Bearer 1234`);
 
-      expect(result.status).toBe(400);
-      expect(result.body.message).toBe("Invalid token !");
+      expect(result.status).toBe(401);
+      expect(result.body.message).toBe("Unauthorized !");
       expect(result.body.codeError).toBe("auth.token.invalid");
     });
 
-    test("should return a 500 if decode throw an error", async () => {
+    test("should return a 500 if the middleware token verification throws", async () => {
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockImplementation(() => {
+        throw new Error();
+      });
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockRejectedValue(new Error());
-      jwt.decode = decodeMock;
 
       const destroyMock = jest.fn();
       destroyMock.mockResolvedValue(measurements[0]);
@@ -1560,7 +1635,7 @@ describe("Measurement controller", () => {
         .set("Authorization", `Bearer 1234`);
 
       expect(result.status).toBe(500);
-      expect(result.body.message).toBe("Server error");
+      expect(result.body.message).toBe("Server error !");
       expect(result.body.codeError).toBe("server.error");
     });
 
@@ -1930,13 +2005,11 @@ describe("Measurement controller", () => {
       expect(result.body.codeError).toBe("server.error");
     });
 
-    test("should return a 400 if decode return null", async () => {
+    test("should return a 401 if the token payload is null", async () => {
+      // Decoding is now owned by the auth middleware; a null payload is a 401.
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockReturnValue(null);
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockReturnValue(null);
-      jwt.decode = decodeMock;
 
       const findAllMock = jest.fn();
       findAllMock.mockResolvedValue(measurements[0]);
@@ -1949,18 +2022,17 @@ describe("Measurement controller", () => {
         )
         .set("Authorization", `Bearer 1234`);
 
-      expect(result.status).toBe(400);
-      expect(result.body.message).toBe("Invalid token !");
+      expect(result.status).toBe(401);
+      expect(result.body.message).toBe("Unauthorized !");
       expect(result.body.codeError).toBe("auth.token.invalid");
     });
 
-    test("should return a 500 if decode throw an error", async () => {
+    test("should return a 500 if the middleware token verification throws", async () => {
       const verifyMock = jest.fn();
-      verifyMock.mockReturnValue({ id: "id-34", role: Role.ADMIN });
+      verifyMock.mockImplementation(() => {
+        throw new Error();
+      });
       jwt.verify = verifyMock;
-      const decodeMock = jest.fn();
-      decodeMock.mockRejectedValue(new Error());
-      jwt.decode = decodeMock;
 
       const findAllMock = jest.fn();
       findAllMock.mockResolvedValue(measurements[0]);
@@ -1974,7 +2046,7 @@ describe("Measurement controller", () => {
         .set("Authorization", `Bearer 1234`);
 
       expect(result.status).toBe(500);
-      expect(result.body.message).toBe("Server error");
+      expect(result.body.message).toBe("Server error !");
       expect(result.body.codeError).toBe("server.error");
     });
   });

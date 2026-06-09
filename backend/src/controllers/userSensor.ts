@@ -254,8 +254,9 @@ const getUserSensorsAccess = async (req: Request, res: Response) => {
 };
 
 const askForSensorAccess = async (req: Request, res: Response) => {
-  const { user, sensor } = req.body;
-  if (!user || !sensor) {
+  const { sensor } = req.body;
+  const requesterId = req.user?.userId;
+  if (!requesterId || !sensor) {
     return res
       .status(400)
       .json(
@@ -267,10 +268,9 @@ const askForSensorAccess = async (req: Request, res: Response) => {
   }
   try {
     const sensorTmp = await verifySensor(sensor);
-    const userTmp = await verifyUser(user);
     const check = await UserSensorAccess.findOne({
       where: {
-        userId: userTmp.dataValues.id,
+        userId: requesterId,
         sensorId: sensorTmp.dataValues.id,
       },
     });
@@ -285,7 +285,7 @@ const askForSensorAccess = async (req: Request, res: Response) => {
         );
     }
     const result = await UserSensorAccess.create({
-      userId: userTmp.dataValues.id,
+      userId: requesterId,
       sensorId: sensorTmp.dataValues.id,
     });
     if (!result) {

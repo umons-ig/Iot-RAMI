@@ -6,16 +6,17 @@ import {
   updateMeasurementType,
   getDiscoveredMeasurementTypes,
 } from "@controllers/measurementType";
+import { auth, authAdmin } from "@middlewares/auth";
 
 const router = express.Router();
 
-router.get("/discovered", getDiscoveredMeasurementTypes);
+router.get("/discovered", authAdmin, getDiscoveredMeasurementTypes);
 
 router
   .route("/:id?")
-  .post(createMeasurementType)
-  .get(getMeasurementType)
-  .put(updateMeasurementType)
-  .delete(deleteMeasurementType);
+  .post(authAdmin, createMeasurementType)
+  .get(auth, getMeasurementType)
+  .put(authAdmin, updateMeasurementType)
+  .delete(authAdmin, deleteMeasurementType);
 
 export { router as measurementTypeRoutes };

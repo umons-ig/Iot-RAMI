@@ -11,7 +11,7 @@ API REST Express/TypeScript pour la gestion des capteurs IoT du projet RAMI 1.0 
 | Node.js + Express + TypeScript | Serveur HTTP REST |
 | TimescaleDB (PostgreSQL 13) | Stockage des données capteurs (hypertable) |
 | Sequelize | ORM + migrations |
-| Kafka (Confluent) | Pipeline de données temps réel |
+| Kafka (`apache/kafka:3.9.0`, mode KRaft) | Pipeline de données temps réel |
 | MQTT (Mosquitto local, via fog-service) | Réception des données des capteurs |
 | Socket.io | WebSocket pour le frontend temps réel |
 | JWT + bcrypt | Authentification |
@@ -42,7 +42,7 @@ DB_VERSION=13
 DB_PORT_OUT=5432
 DB_PORT_IN=5432
 DB_USER=umons-sensor-dev
-DB_PASSWORD=umons-sensor-dev
+DB_PASSWORD=change_me
 DB_NAME=umons-sensor-db-dev
 
 NODE_ENV=development
@@ -51,7 +51,7 @@ NODE_PORT_IN=3000
 NODE_PORT_OUT=3000
 NODE_CONTAINER_NAME=umons-sensor-dev
 
-JWT_SECRET=umons-sensor-dev
+JWT_SECRET=change-me-in-production
 JWT_EXPIRATION=1d
 BCRYPT_SALT_ROUNDS=10
 
@@ -67,17 +67,22 @@ KAFKA_BROKERS=kafka:9092
 
 ```bash
 npm run docker:build    # Build l'image (nécessite NODE_ENV défini)
-npm run docker:start    # Lance TimescaleDB, Kafka, Zookeeper, Mosquitto (compose de dev local)
+npm run docker:start    # Lance TimescaleDB, Kafka (KRaft), Prometheus, Grafana et le backend
 ```
 
 Services Docker démarrés (compose de dev local — `backend/docker-compose.yml`) :
-- `node-db` — TimescaleDB sur le port 5432
-- `kafka` — Kafka (Confluent) sur le port 9092
-- `zookeeper` — Coordination Kafka sur le port 2181
-- `mosquitto` — Broker MQTT local sur les ports 1883 / 9001
+- `node-backend` — API Express sur le port 3000
+- `node-db` — TimescaleDB (PostgreSQL 13) sur le port 5432
+- `kafka` — `apache/kafka:3.9.0` en mode **KRaft** (sans Zookeeper) sur le port 9092
 - `prometheus` / `grafana` — Monitoring sur les ports 9090 / 3001
 
-> Le compose de production (`docker-compose.yml` racine) utilise Kafka en mode KRaft (sans Zookeeper) et inclut le service `frontend`.
+> **Mosquitto n'est PAS inclus dans ce compose de dev** : le broker MQTT tourne sur le
+> Raspberry Pi fog (`fog-service/compose.yaml`). Pour un test local avec le simulateur
+> Python sans fog, lancez un broker MQTT (Mosquitto local ou conteneur) et pointez le
+> simulateur dessus via son argument de broker.
+>
+> Le compose de production (`docker-compose.yml` racine) reprend cette même configuration
+> Kafka KRaft et ajoute en plus les services `mosquitto`, `frontend` et `watchtower`.
 
 ### 2. Initialiser la base de données (première fois)
 
@@ -156,9 +161,9 @@ Compte de test (seed) : `adriano@ig.umons.ac.be` / `adriano@ig.umons.ac.be`
 
 ## CI/CD
 
-Pipeline GitHub Actions (`.github/workflows/docker-image.yml`) :
+Pipeline GitHub Actions (`.github/workflows/backend-ci.yml`) :
 1. **lint** — ESLint
 2. **test** — Jest
-3. **docker-push** — Build + push vers `ghcr.io/thegasp16/iot-rami` (sur push vers `main` uniquement)
+3. **docker-push** — Build + push vers `ghcr.io/gaspardmenou/iot-rami-backend` (sur push vers `main` uniquement)
 
 Déploiement automatique via Watchtower sur la VM de production.

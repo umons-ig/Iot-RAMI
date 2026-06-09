@@ -36,13 +36,6 @@ class SensorMode(Mode):
             except ValueError:
                 print("{} is not a valid number.".format(value))
 
-    
-    def ask_for_value_mode(self):
-        mode = input("Do you want to send ordered values? [y] otherwise random: ").strip().lower()
-        if mode == 'y':
-            return self.publish_ordered_value
-        else:
-            return self.publish_random_value
 
     def ask_for_measurement_type(self):
         measurement_list = []
@@ -117,20 +110,3 @@ class SensorMode(Mode):
             self.interact_with_received_command(received_json[MqttAppConstants.MSG_CMD])
         elif MqttAppConstants.MSG_ANS in received_json:
             self.interact_with_received_answer(received_json[MqttAppConstants.MSG_ANS])
-
-
-    def publish_random_value(self, topic):
-        while True:
-            if self.allow_to_publish:
-                value = random.randint(1, 100)/100
-                self.publish_value(topic, value)
-            time.sleep(self.time_sleep_beetween_two_values)
-
-
-    def publish_ordered_value(self, topic):
-        value = 1
-        while True:
-            if self.allow_to_publish:
-                self.publish_value(topic, value)
-                value += 1
-            time.sleep(self.time_sleep_beetween_two_values)
