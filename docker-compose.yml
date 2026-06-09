@@ -1,6 +1,6 @@
   services:
     node-db:
-      image: timescale/timescaledb:latest-pg13
+      image: timescale/timescaledb:2.17.2-pg13
       container_name: iot-rami-db
       restart: always
       ports:
@@ -36,6 +36,16 @@
         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT"
         KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
         KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        # ─── Activation SASL_SSL côté broker (optionnel) ───────────────────────
+        # Défaut : PLAINTEXT (subnet local de confiance). Pour chiffrer/authentifier
+        # le lien fog→cloud sur un réseau non fiable, l'option la plus simple reste
+        # un tunnel WireGuard (niveau réseau, aucune conf Kafka). Sinon, remplacer le
+        # listener PLAINTEXT_HOST par un listener SASL_SSL :
+        #   KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL,CONTROLLER:PLAINTEXT"
+        #   KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+        #   KAFKA_LISTENERS: "PLAINTEXT://:29092,SASL_SSL://:9092,CONTROLLER://:9093"
+        #   KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://iot-rami-kafka:29092,SASL_SSL://${SERVER_HOST}:9092,CONTROLLER://iot-rami-kafka:9093"
+        # + monter les keystores/truststore et fournir le JAAS config. Voir docs/ETAT_DES_LIEUX.md.
       healthcheck:
         test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29092"]
         interval: 10s
@@ -65,11 +75,28 @@
         BCRYPT_SALT_ROUNDS: 10
         KAFKA_BROKERS: "iot-rami-kafka:29092"
         FRONTEND_URL: "http://${SERVER_HOST}:8080"
+        # Sécurité Kafka optionnelle (défaut PLAINTEXT local). Voir .env.example.
+        KAFKA_SSL: ${KAFKA_SSL:-}
+        KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+        KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+        KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
       depends_on:
         node-db:
           condition: service_healthy
         kafka:
           condition: service_healthy
+      healthcheck:
+        test:
+          [
+            "CMD",
+            "node",
+            "-e",
+            "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+          ]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+        start_period: 30s
       networks:
         - rami-network
 
@@ -82,11 +109,20 @@
       environment:
         VITE_APP_BACK_URL: "http://${SERVER_HOST}:3000/api/v1"
         VITE_SOCKET_URL: "http://${SERVER_HOST}:3000"
+      depends_on:
+        node-backend:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+        start_period: 15s
       networks:
         - rami-network
 
     prometheus:
-      image: prom/prometheus:latest
+      image: prom/prometheus:v2.54.1
       container_name: iot-rami-prometheus
       restart: always
       ports:
@@ -94,12 +130,13 @@
       volumes:
         - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       depends_on:
-        - node-backend
+        node-backend:
+          condition: service_healthy
       networks:
         - rami-network
 
     grafana:
-      image: grafana/grafana:latest
+      image: grafana/grafana:11.3.0
       container_name: iot-rami-grafana
       restart: always
       ports:
@@ -107,14 +144,14 @@
       volumes:
         - grafana-data:/var/lib/grafana
       environment:
-        GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-admin}
+        GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?Definir GF_SECURITY_ADMIN_PASSWORD dans .env}
       depends_on:
         - prometheus
       networks:
         - rami-network
 
     watchtower:
-      image: containrrr/watchtower
+      image: containrrr/watchtower:1.7.1
       container_name: iot-rami-watchtower
       restart: always
       volumes:
