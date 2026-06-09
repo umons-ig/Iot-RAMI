@@ -89,11 +89,24 @@ python3 ./mqttCliApp.py sensor local --topic pysimulator-esp32-ecg-topic --types
 - README Frontend : [`frontend/README.md`](./frontend/README.md)
 - README Fog : [`fog-service/README.md`](./fog-service/README.md)
 - Simulateur Python : [`python-simulator-over-mqtt-master/README.md`](./python-simulator-over-mqtt-master/README.md)
-- Sketches Arduino : [`Arduino/ESP32/`](./Arduino/ESP32/) (DHT22, AD8232, BME280 — pas de README dédié)
+- Sketches Arduino/ESP32 : [`Arduino/ESP32/README.md`](./Arduino/ESP32/README.md) (DHT22, AD8232, BME280, HC-SR04, MR60BHA2)
 
 ---
+
+## Sécurité & déploiement (état actuel)
+
+> **HTTPS / Reverse proxy : non encore en place.** Tant que le projet n'est pas en
+> production, les services sont exposés en **HTTP clair** (backend `:3000`, frontend `:8080`,
+> Grafana `:3001`). Avant toute mise en production, prévoir un **reverse proxy TLS**
+> (Traefik ou Caddy) en frontal pour terminer le HTTPS (Let's Encrypt), n'exposer qu'un seul
+> port 443, et fermer les ports applicatifs et Kafka de l'accès direct.
+>
+> De même, le transport **fog → Kafka** est aujourd'hui en `PLAINTEXT` sans authentification.
+> Voir [`docs/ETAT_DES_LIEUX.md`](./docs/ETAT_DES_LIEUX.md) pour les pistes de sécurisation
+> (WireGuard, SASL_SSL) et les autres chantiers (rétention locale des données médicales,
+> standardisation MQTT, intégration Home Assistant).
 
 ## CI/CD
 
 Pipeline GitHub Actions : lint → test → docker build → push vers GHCR → déploiement auto via Watchtower sur VM.
-Image Docker : `ghcr.io/thegasp16/iot-rami`
+Images Docker : `ghcr.io/gaspardmenou/iot-rami-backend`, `ghcr.io/gaspardmenou/iot-rami-frontend`, `ghcr.io/gaspardmenou/iot-rami-fog`

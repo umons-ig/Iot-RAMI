@@ -9,6 +9,10 @@
 | [DEMO.md](./DEMO.md)   | Scenario de demonstration pas a pas                     |
 | [RAPPORT.md](./RAPPORT.md) | Rapport de contribution du stage                    |
 | [LOAD_TEST.md](./LOAD_TEST.md) | Résultats et analyse du test de charge (17/03/2026) |
+| [IMPROVEMENTS.md](./IMPROVEMENTS.md) | Backlog priorisé des améliorations (effort, fichiers concernés) |
+| [ETAT_DES_LIEUX.md](./ETAT_DES_LIEUX.md) | Audit complet du 09/06/2026 + axes stratégiques (sécurité fog→Kafka, rétention locale, MQTT/Home Assistant) |
+| [FOG_PERSISTENCE.md](./FOG_PERSISTENCE.md) | Conception : rétention locale & store-and-forward sur le fog (données médicales durables) |
+| [MQTT_HOMEASSISTANT.md](./MQTT_HOMEASSISTANT.md) | Conception : standardisation MQTT (type zigbee2mqtt) & intégration Home Assistant |
 
 ## Architecture en bref
 
