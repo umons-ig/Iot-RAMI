@@ -47,14 +47,33 @@ ESP32 / Simulateur Python
 
 ## Démarrage rapide
 
-### 1. Backend (API + base de données)
+> Les scripts `docker:*` lisent `NODE_ENV` pour choisir le fichier d'env
+> (`.env.$NODE_ENV`) et le nom du projet Compose. Exporte-le d'abord :
+> ```bash
+> export NODE_ENV=development
+> ```
+
+### 1. Backend (API + base de données, tout en Docker)
 ```bash
 cd backend
 npm install
-npm run docker:start        # Lance TimescaleDB, Kafka, Mosquitto, backend via Docker
-npm run docker:init-db      # Migrations + seeders (première fois)
-npm run dev                 # Démarre le serveur sur :3000
+npm run docker:start        # Lance TimescaleDB, Kafka, le backend (:3000), le frontend, Prometheus et Grafana
+npm run docker:init-db      # PREMIÈRE FOIS uniquement : migrations + seeders
 ```
+
+Le backend tourne désormais dans le conteneur sur `:3000`. Inutile de lancer
+`npm run dev` en plus (ce serait un second serveur, hors Docker).
+
+> **Après un `git pull` qui ajoute/modifie une colonne** (nouveau champ de
+> modèle Sequelize), applique les migrations **sans** recréer la base :
+> ```bash
+> npm run docker:migrate     # docker exec ... npm run migrate
+> ```
+> ⚠️ Ne fais **jamais** `docker compose down -v` pour corriger une 500 : `-v`
+> **efface le volume de la base** (toutes les données). En dev c'est sans
+> conséquence (les seeders rechargent tout), mais en **prod** tu perdrais les
+> vraies mesures capteurs. La bonne réponse à une 500 au login du type
+> `column "..." does not exist`, c'est `docker:migrate`.
 
 ### 2. Frontend
 ```bash
@@ -69,6 +88,56 @@ cd python-simulator-over-mqtt-master
 pip install -r requirements.txt
 python3 ./mqttCliApp.py sensor local --topic pysimulator-esp32-ecg-topic --types temperature humidity --rate 1
 ```
+
+### Commandes Docker utiles (backend)
+| Commande | Effet |
+|----------|-------|
+| `npm run docker:start` | Démarre toute la stack (DB, Kafka, backend, frontend, Prometheus, Grafana) |
+| `npm run docker:stop` | Arrête les conteneurs (conserve les données) |
+| `npm run docker:migrate` | Applique les migrations en attente dans le conteneur |
+| `npm run docker:init-db` | Migrations **+ seeders** (réinitialisation complète du schéma) |
+| `npm run docker:exec` | Ouvre un shell dans le conteneur backend |
+
+---
+
+## Stack Docker
+
+Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le **cloud** (VM/LXC ou Raspberry Pi) et le **fog** (Raspberry Pi en bordure de réseau, proche des capteurs).
+
+### Cloud — `docker-compose.yml` (racine)
+
+| Service | Image | Port (hôte→conteneur) | Rôle |
+|---------|-------|-----------------------|------|
+| `node-db` | TimescaleDB / PostgreSQL 13 | `5432` | Base de données (hypertable `SensorData`) |
+| `kafka` | `apache/kafka:3.9.0` (KRaft, sans Zookeeper) | `9092` | Bus de messages `sensor-data` |
+| `node-backend` | `ghcr.io/gaspardmenou/iot-rami-backend` | `3000` | API REST + WebSocket + consumer Kafka |
+| `frontend` | `ghcr.io/gaspardmenou/iot-rami-frontend` (Nginx) | `8080→80` | SPA Vue 3 |
+| `prometheus` | `prom/prometheus` | `9090` | Scraping des métriques |
+| `grafana` | `grafana/grafana` | `3001→3000` | Dashboards |
+| `watchtower` | `containrrr/watchtower` | — | Auto-déploiement (poll GHCR toutes les 300 s) |
+
+> ⚠️ **Mosquitto n'est PAS dans le compose racine** : le broker MQTT vit uniquement sur le fog (voir ci-dessous). Le cloud ne reçoit les données que via Kafka.
+
+### Fog — `fog-service/compose.yaml` (Raspberry Pi)
+
+| Service | Image | Port | Rôle |
+|---------|-------|------|------|
+| `mosquitto` | `eclipse-mosquitto:2.0.20` | `1883` | Broker MQTT local (capteurs ↔ fog) |
+| `fog-service` | `ghcr.io/gaspardmenou/iot-rami-fog` | — | Bridge MQTT → Kafka + buffer |
+| `fog-postgres` | `postgres:16-alpine` | — | Store-and-forward persistant (outbox) si le cloud est injoignable |
+| `watchtower` | `containrrr/watchtower:1.7.1` | — | Auto-déploiement de l'image fog |
+
+### Volumes & persistance
+
+- `db-data` (cloud) : données TimescaleDB — **ne jamais supprimer en prod** (`down -v` efface tout).
+- `grafana-data` (cloud) : dashboards et config Grafana.
+- L'outbox `fog-postgres` (fog) garantit qu'aucune mesure n'est perdue pendant une coupure réseau fog↔cloud : les messages sont rejoués à la reconnexion.
+
+### Déploiement continu (Watchtower)
+
+La CI pousse les images sur **GHCR** (publiques). Sur chaque hôte, **Watchtower** détecte les nouvelles images `latest` et redéploie automatiquement les conteneurs — aucun `git pull` ni rebuild manuel sur les serveurs. Voir [CI/CD](#cicd).
+
+> 💡 **Rappel migrations** : Watchtower met à jour le **code**, pas le **schéma** de la base. Après un déploiement qui ajoute une colonne, lancer `npm run docker:migrate` (cf. encadré « Démarrage rapide ») — sinon le backend renvoie une **500** sur les requêtes touchant la nouvelle colonne.
 
 ---
 
