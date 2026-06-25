@@ -3,14 +3,19 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import MqttFog from "./mqttFog";
+import { startMetricsServer } from "./metricsServer";
+import { METRICS_CONFIG } from "./constants";
+import type { Server } from "http";
 
 let isShuttingDown = false;
+let metricsServer: Server | undefined;
 
 async function shutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log(`[FogService] Signal ${signal} reçu — arrêt propre...`);
   try {
+    metricsServer?.close();
     const fog = await MqttFog.getInstance();
     await fog.shutdown();
   } catch (error) {
@@ -29,7 +34,11 @@ process.on("SIGINT", () => {
 
 async function main() {
   console.log("🚀 [FogService] Démarrage...");
-  await MqttFog.getInstance();
+  const fog = await MqttFog.getInstance();
+  // Serveur de métriques Prometheus (§3.1).
+  metricsServer = startMetricsServer(METRICS_CONFIG.port, () =>
+    fog.getMetricsSnapshot()
+  );
   console.log("✅ [FogService] Service démarré");
 }
 

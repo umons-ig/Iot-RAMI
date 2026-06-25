@@ -15,6 +15,12 @@ services:
       - PG_USER=${PG_USER:-fog}
       - PG_PASSWORD=${PG_PASSWORD:-fog}
       - PG_DATABASE=${PG_DATABASE:-fog_outbox}
+      # Observabilité (§3.1)
+      - METRICS_PORT=9100
+    ports:
+      # Métriques Prometheus du fog, à scraper depuis le cloud (idéalement via
+      # WireGuard). Restreindre la source au firewall si exposé sur le LAN.
+      - "9100:9100"
     depends_on:
       mosquitto:
         condition: service_started

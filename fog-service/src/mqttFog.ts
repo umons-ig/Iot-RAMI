@@ -20,6 +20,7 @@ class MqttFog {
   private flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   private maxBufferSize = BUFFER_CONFIG.maxBufferSize;
   private dropWarnedTopics = new Set<string>();
+  private dropCount = 0; // nombre cumulé de messages droppés (buffer plein) — métrique §3.1
   private sensorTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private sessionTimers: Map<string, NodeJS.Timeout> = new Map();
   private sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
@@ -48,6 +49,33 @@ class MqttFog {
       MqttFog.instance.startPurge();
     }
     return MqttFog.instance;
+  }
+
+  /**
+   * Instantané de métriques pour l'observabilité (§3.1) : lag store-and-forward,
+   * état Kafka, drops buffer, taille du buffer mémoire. Exposé via /metrics.
+   */
+  public async getMetricsSnapshot(): Promise<{
+    outboxPending: number;
+    kafkaConnected: boolean;
+    drops: number;
+    bufferSize: number;
+  }> {
+    let outboxPending = 0;
+    try {
+      outboxPending = await this.outbox.pendingCount();
+    } catch {
+      // outbox indisponible : on remonte -1 pour le signaler côté métrique
+      outboxPending = -1;
+    }
+    let bufferSize = 0;
+    for (const arr of this.buffer.values()) bufferSize += arr.length;
+    return {
+      outboxPending,
+      kafkaConnected: this.kafkaService?.isConnected() ?? false,
+      drops: this.dropCount,
+      bufferSize,
+    };
   }
 
   /**
@@ -224,6 +252,7 @@ class MqttFog {
     }
     const dataArray = this.buffer.get(topic)!;
     if (dataArray.length >= this.maxBufferSize) {
+      this.dropCount++;
       if (!this.dropWarnedTopics.has(topic)) {
         console.warn(`⚠️ [handleMeasurement] Buffer plein (${this.maxBufferSize}) pour ${topic} — messages droppés jusqu'au prochain flush`);
         this.dropWarnedTopics.add(topic);
