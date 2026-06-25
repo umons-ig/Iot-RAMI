@@ -100,6 +100,47 @@ python3 ./mqttCliApp.py sensor local --topic pysimulator-esp32-ecg-topic --types
 
 ---
 
+## Stack Docker
+
+Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le **cloud** (VM/LXC ou Raspberry Pi) et le **fog** (Raspberry Pi en bordure de réseau, proche des capteurs).
+
+### Cloud — `docker-compose.yml` (racine)
+
+| Service | Image | Port (hôte→conteneur) | Rôle |
+|---------|-------|-----------------------|------|
+| `node-db` | TimescaleDB / PostgreSQL 13 | `5432` | Base de données (hypertable `SensorData`) |
+| `kafka` | `apache/kafka:3.9.0` (KRaft, sans Zookeeper) | `9092` | Bus de messages `sensor-data` |
+| `node-backend` | `ghcr.io/gaspardmenou/iot-rami-backend` | `3000` | API REST + WebSocket + consumer Kafka |
+| `frontend` | `ghcr.io/gaspardmenou/iot-rami-frontend` (Nginx) | `8080→80` | SPA Vue 3 |
+| `prometheus` | `prom/prometheus` | `9090` | Scraping des métriques |
+| `grafana` | `grafana/grafana` | `3001→3000` | Dashboards |
+| `watchtower` | `containrrr/watchtower` | — | Auto-déploiement (poll GHCR toutes les 300 s) |
+
+> ⚠️ **Mosquitto n'est PAS dans le compose racine** : le broker MQTT vit uniquement sur le fog (voir ci-dessous). Le cloud ne reçoit les données que via Kafka.
+
+### Fog — `fog-service/compose.yaml` (Raspberry Pi)
+
+| Service | Image | Port | Rôle |
+|---------|-------|------|------|
+| `mosquitto` | `eclipse-mosquitto:2.0.20` | `1883` | Broker MQTT local (capteurs ↔ fog) |
+| `fog-service` | `ghcr.io/gaspardmenou/iot-rami-fog` | — | Bridge MQTT → Kafka + buffer |
+| `fog-postgres` | `postgres:16-alpine` | — | Store-and-forward persistant (outbox) si le cloud est injoignable |
+| `watchtower` | `containrrr/watchtower:1.7.1` | — | Auto-déploiement de l'image fog |
+
+### Volumes & persistance
+
+- `db-data` (cloud) : données TimescaleDB — **ne jamais supprimer en prod** (`down -v` efface tout).
+- `grafana-data` (cloud) : dashboards et config Grafana.
+- L'outbox `fog-postgres` (fog) garantit qu'aucune mesure n'est perdue pendant une coupure réseau fog↔cloud : les messages sont rejoués à la reconnexion.
+
+### Déploiement continu (Watchtower)
+
+La CI pousse les images sur **GHCR** (publiques). Sur chaque hôte, **Watchtower** détecte les nouvelles images `latest` et redéploie automatiquement les conteneurs — aucun `git pull` ni rebuild manuel sur les serveurs. Voir [CI/CD](#cicd).
+
+> 💡 **Rappel migrations** : Watchtower met à jour le **code**, pas le **schéma** de la base. Après un déploiement qui ajoute une colonne, lancer `npm run docker:migrate` (cf. encadré « Démarrage rapide ») — sinon le backend renvoie une **500** sur les requêtes touchant la nouvelle colonne.
+
+---
+
 ## Comptes de test (seed)
 
 | Email | Mot de passe | Rôle |
