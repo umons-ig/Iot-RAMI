@@ -12,7 +12,7 @@ Le backend RAMI expose des métriques au format Prometheus. Prometheus les scrap
 | Grafana    | http://localhost:3001   | 3001 |
 | Métriques brutes (backend) | http://localhost:3000/metrics | 3000 |
 
-> La route `/metrics` est exposée sans authentification. Elle ne passe pas par `/api/v1` et n'est pas protégée par le middleware JWT.
+> La route `/metrics` ne passe pas par `/api/v1` et n'est donc pas protégée par le middleware JWT. Elle est en revanche restreinte par une **whitelist IP** (`backend/src/app.ts`) : seuls `localhost` (`127.0.0.1`, `::1`) et le sous-réseau Docker (`172.*`, où tourne Prometheus) y ont accès. Tout autre client reçoit un refus.
 
 ---
 

@@ -47,7 +47,7 @@ Le backend cree une nouvelle session en base de donnees.
 
 ### Type `data` — Donnees de mesure
 
-Publie par le fog a intervalles reguliers (flush toutes les 1 seconde ou apres 10 entrees).
+Publie par le fog a intervalles reguliers (flush toutes les `FLUSH_INTERVAL_MS` = **200 ms** par defaut, ou des que le buffer atteint `FLUSH_MAX_SIZE` = **50 entrees**).
 Le backend stocke les donnees en base (TimescaleDB) et les envoie aux clients WebSocket connectes.
 
 ```json

@@ -47,14 +47,33 @@ ESP32 / Simulateur Python
 
 ## Démarrage rapide
 
-### 1. Backend (API + base de données)
+> Les scripts `docker:*` lisent `NODE_ENV` pour choisir le fichier d'env
+> (`.env.$NODE_ENV`) et le nom du projet Compose. Exporte-le d'abord :
+> ```bash
+> export NODE_ENV=development
+> ```
+
+### 1. Backend (API + base de données, tout en Docker)
 ```bash
 cd backend
 npm install
-npm run docker:start        # Lance TimescaleDB, Kafka, Mosquitto, backend via Docker
-npm run docker:init-db      # Migrations + seeders (première fois)
-npm run dev                 # Démarre le serveur sur :3000
+npm run docker:start        # Lance TimescaleDB, Kafka, le backend (:3000), le frontend, Prometheus et Grafana
+npm run docker:init-db      # PREMIÈRE FOIS uniquement : migrations + seeders
 ```
+
+Le backend tourne désormais dans le conteneur sur `:3000`. Inutile de lancer
+`npm run dev` en plus (ce serait un second serveur, hors Docker).
+
+> **Après un `git pull` qui ajoute/modifie une colonne** (nouveau champ de
+> modèle Sequelize), applique les migrations **sans** recréer la base :
+> ```bash
+> npm run docker:migrate     # docker exec ... npm run migrate
+> ```
+> ⚠️ Ne fais **jamais** `docker compose down -v` pour corriger une 500 : `-v`
+> **efface le volume de la base** (toutes les données). En dev c'est sans
+> conséquence (les seeders rechargent tout), mais en **prod** tu perdrais les
+> vraies mesures capteurs. La bonne réponse à une 500 au login du type
+> `column "..." does not exist`, c'est `docker:migrate`.
 
 ### 2. Frontend
 ```bash
@@ -69,6 +88,15 @@ cd python-simulator-over-mqtt-master
 pip install -r requirements.txt
 python3 ./mqttCliApp.py sensor local --topic pysimulator-esp32-ecg-topic --types temperature humidity --rate 1
 ```
+
+### Commandes Docker utiles (backend)
+| Commande | Effet |
+|----------|-------|
+| `npm run docker:start` | Démarre toute la stack (DB, Kafka, backend, frontend, Prometheus, Grafana) |
+| `npm run docker:stop` | Arrête les conteneurs (conserve les données) |
+| `npm run docker:migrate` | Applique les migrations en attente dans le conteneur |
+| `npm run docker:init-db` | Migrations **+ seeders** (réinitialisation complète du schéma) |
+| `npm run docker:exec` | Ouvre un shell dans le conteneur backend |
 
 ---
 
