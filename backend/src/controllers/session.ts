@@ -11,7 +11,9 @@ import {
 } from "@controllers/sensorData";
 
 // Model import
-import { QueryTypes } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
+import { Role, UserPayload } from "#/user";
+import { getAccessibleSensorIds } from "@service/sensorAccess";
 import db from "@db/index";
 const DB: any = db;
 const { Sensor, Session, sequelize } = DB;
@@ -104,6 +106,17 @@ const createSessionOnServerSide = async (req: Request, res: Response) => {
   }
 };
 
+// Restreint une clause `where` de Session aux capteurs accessibles à
+// l'utilisateur (sauf admin qui voit tout). Renvoie null si pas de filtre.
+const sessionAccessWhere = async (
+  req: Request
+): Promise<Record<string, unknown> | null> => {
+  const user = req.user as UserPayload | undefined;
+  if (user?.role === Role.ADMIN) return null;
+  const accessibleSensorIds = await getAccessibleSensorIds(user?.userId ?? "");
+  return { idSensor: { [Op.in]: accessibleSensorIds } };
+};
+
 // Get all sessions
 const getAllSessions = async (req: Request, res: Response) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -113,7 +126,9 @@ const getAllSessions = async (req: Request, res: Response) => {
   );
   const offset = (page - 1) * limit;
   try {
+    const accessWhere = await sessionAccessWhere(req);
     const { count, rows } = await Session.findAndCountAll({
+      ...(accessWhere ? { where: accessWhere } : {}),
       limit,
       offset,
       order: [["createdAt", "DESC"]],
@@ -131,11 +146,13 @@ const getAllSessions = async (req: Request, res: Response) => {
 };
 
 // Get all active sessions
-const getAllActiveSessions = async (_: Request, res: Response) => {
+const getAllActiveSessions = async (req: Request, res: Response) => {
   try {
+    const accessWhere = await sessionAccessWhere(req);
     const sessions = await Session.findAll({
       where: {
         endedAt: null, // Assuming that an active session has a null endedAt
+        ...(accessWhere ?? {}),
       },
     });
     return res.status(200).json(sessions);
@@ -297,9 +314,9 @@ const exportSessionAsCsv = async (req: Request, res: Response) => {
       `time,value,type`,
       ...sensorData.map(
         (row: any) =>
-          `${new Date(row.time).toISOString()},${row.value},${
-            row.MeasurementType.name
-          }`
+          `${new Date(row.time).toISOString()},${sanitizeCsvField(
+            String(row.value)
+          )},${sanitizeCsvField(row.MeasurementType.name)}`
       ),
     ];
     res.setHeader("Content-Type", "text/csv");

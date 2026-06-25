@@ -1,12 +1,15 @@
 import { Request, Response } from "express";
+import { Op } from "sequelize";
 import {
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   ServerErrorException,
   UnauthorizedException,
 } from "@utils/exceptions";
 // Model(s) import
 import db from "@db/index";
+import { getAccessibleSensorIds } from "@service/sensorAccess";
 const DB: any = db;
 const { User, Session } = DB;
 // --- End of model(s) import
@@ -504,6 +507,22 @@ const getAllRoleWithWorseRole = async (req: Request, res: Response) => {
 
 const getUserSessions = async (req: Request, res: Response) => {
   const { id, idSensor } = req.params;
+  const requester = req.user as UserPayload;
+  const isAdmin = requester?.role === Role.ADMIN;
+
+  // Un utilisateur non-admin ne peut consulter QUE ses propres sessions.
+  // Sans ce contrôle, tout compte pouvait lister les sessions d'un autre
+  // utilisateur via /users/<autre_id>/sessions (IDOR). Cf. PLAN_AMELIORATIONS §0.1.
+  if (!isAdmin && requester?.userId !== id) {
+    return res
+      .status(403)
+      .json(
+        new ForbiddenException(
+          "You can only access your own sessions",
+          "user.sessions.forbidden"
+        )
+      );
+  }
 
   try {
     // Let's find out the user
@@ -517,8 +536,32 @@ const getUserSessions = async (req: Request, res: Response) => {
 
     const whereClause: any = {};
 
-    if (idSensor) {
-      whereClause.idSensor = idSensor;
+    if (isAdmin) {
+      // L'admin voit tout ; filtre facultatif par capteur.
+      if (idSensor) {
+        whereClause.idSensor = idSensor;
+      }
+    } else {
+      // Sinon on restreint aux capteurs auxquels l'utilisateur a accès
+      // (accès direct ∪ zones/teams).
+      const accessibleSensorIds = await getAccessibleSensorIds(
+        requester.userId
+      );
+      if (idSensor) {
+        if (!accessibleSensorIds.includes(idSensor)) {
+          return res
+            .status(403)
+            .json(
+              new ForbiddenException(
+                "You do not have access to this sensor",
+                "sensor.access.forbidden"
+              )
+            );
+        }
+        whereClause.idSensor = idSensor;
+      } else {
+        whereClause.idSensor = { [Op.in]: accessibleSensorIds };
+      }
     }
 
     const limit = parseInt(String(req.query.limit || "50"), 10);

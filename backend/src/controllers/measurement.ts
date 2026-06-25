@@ -15,6 +15,7 @@ import { MeasurementModel } from "#/measurement";
 import { Role, UserPayload } from "#/user";
 import { FindAttributeOptions, Op, OrderItem } from "sequelize";
 import { Status } from "#/sensor";
+import { zoneGrantedSensorIds } from "@service/sensorAccess";
 
 const formatKey = (format: string, timestamp: Date): string => {
   const getTimePart = (part: string): number => {
@@ -168,78 +169,6 @@ const getSample = ({
   });
 
   return sampleTmp;
-};
-
-/**
- * Capteurs accessibles via les ZONES accordées à l'utilisateur (directement
- * ou via ses teams), en CASCADE sur le sous-arbre : un accès « Bâtiment A »
- * donne accès à tous les capteurs des étages/pièces sous A.
- */
-const zoneGrantedSensorIds = async (userId: string): Promise<string[]> => {
-  try {
-    // 1. Zones accordées directement à l'utilisateur.
-    const userGrants = await DB.UserZoneAccess.findAll({
-      attributes: ["zoneId"],
-      where: { userId },
-      raw: true,
-    });
-    // 2. Zones accordées aux teams dont l'utilisateur est membre.
-    const memberships = await DB.TeamMember.findAll({
-      attributes: ["teamId"],
-      where: { userId },
-      raw: true,
-    });
-    const teamIds = memberships.map((m: any) => m.teamId);
-    let teamGrants: any[] = [];
-    if (teamIds.length > 0) {
-      teamGrants = await DB.TeamZoneAccess.findAll({
-        attributes: ["zoneId"],
-        where: { teamId: { [Op.in]: teamIds } },
-        raw: true,
-      });
-    }
-
-    const grantedZoneIds = new Set<string>([
-      ...userGrants.map((g: any) => g.zoneId),
-      ...teamGrants.map((g: any) => g.zoneId),
-    ]);
-    if (grantedZoneIds.size === 0) return [];
-
-    // 3. Expansion au sous-arbre : on construit la table parent -> enfants
-    //    puis on descend depuis chaque zone accordée (cascade).
-    const allZones = await DB.Zone.findAll({
-      attributes: ["id", "parentId"],
-      raw: true,
-    });
-    const childrenMap = new Map<string, string[]>();
-    allZones.forEach((z: any) => {
-      if (z.parentId) {
-        const arr = childrenMap.get(z.parentId) ?? [];
-        arr.push(z.id);
-        childrenMap.set(z.parentId, arr);
-      }
-    });
-    const expanded = new Set<string>();
-    const stack = [...grantedZoneIds];
-    while (stack.length) {
-      const zid = stack.pop();
-      if (!zid || expanded.has(zid)) continue;
-      expanded.add(zid);
-      for (const c of childrenMap.get(zid) ?? []) stack.push(c);
-    }
-
-    // 4. Capteurs rattachés à l'une de ces zones.
-    const sensors = await DB.Sensor.findAll({
-      attributes: ["id"],
-      where: { zoneId: { [Op.in]: Array.from(expanded) } },
-      raw: true,
-    });
-    return sensors.map((s: any) => s.id);
-  } catch {
-    // Modèles d'accès par zone indisponibles (contexte de test mocké) ou
-    // erreur DB : on dégrade en « aucun accès par zone » (fail-closed, deny).
-    return [];
-  }
 };
 
 const getSensorsAvailable = async (decodedToken: UserPayload, name = false) => {

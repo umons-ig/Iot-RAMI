@@ -1,12 +1,18 @@
 import { Request, Response } from "express";
 import {
   BadRequestException,
+  ForbiddenException,
+  NotFoundException,
   ServerErrorException,
   UnauthorizedException,
 } from "@utils/exceptions";
 import jwt from "jsonwebtoken";
 import { Role, UserPayload } from "#/user";
 import { envs } from "@utils/env";
+import db from "@db/index";
+import { userHasSensorAccess } from "@service/sensorAccess";
+
+const DB: any = db;
 
 const verifyToken = (req: Request): UserPayload => {
   // Check if token is valid (in header in bearer format)
@@ -72,4 +78,55 @@ const requireRole =
 
 const authAdmin = requireRole(Role.ADMIN);
 
-export { auth, verifyToken, authAdmin, requireRole };
+/**
+ * Vérifie que l'utilisateur authentifié a le droit d'accéder à la session
+ * désignée par `req.params.id` (via l'accès au capteur sous-jacent).
+ *
+ * À chaîner APRÈS `auth` (qui pose `req.user`). Les admins passent toujours.
+ * - Session introuvable          -> 404
+ * - Pas d'accès au capteur        -> 403
+ *
+ * Ferme l'IDOR sur les routes de lecture/export de session : sans ce garde,
+ * tout compte authentifié pouvait lire les données (ECG) de n'importe quel
+ * capteur. Voir docs/PLAN_AMELIORATIONS.md §0.1.
+ */
+const requireSessionAccess = async (
+  req: Request,
+  res: Response,
+  next: () => void
+) => {
+  try {
+    const user = req.user as UserPayload;
+    if (user?.role === Role.ADMIN) {
+      return next();
+    }
+
+    const session = await DB.Session.findByPk(req.params.id);
+    if (!session) {
+      return res
+        .status(404)
+        .json(new NotFoundException("Session not found", "session.not.found"));
+    }
+
+    const idSensor = session.dataValues?.idSensor ?? session.idSensor;
+    const allowed = await userHasSensorAccess(user.userId, idSensor);
+    if (!allowed) {
+      return res
+        .status(403)
+        .json(
+          new ForbiddenException(
+            "You do not have access to this session",
+            "session.access.forbidden"
+          )
+        );
+    }
+
+    return next();
+  } catch (error) {
+    return res
+      .status(500)
+      .json(new ServerErrorException("Server error !", "server.error"));
+  }
+};
+
+export { auth, verifyToken, authAdmin, requireRole, requireSessionAccess };

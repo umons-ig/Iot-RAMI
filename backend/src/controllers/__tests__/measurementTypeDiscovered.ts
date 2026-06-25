@@ -62,6 +62,7 @@ jest.mock("@db/index", () => ({
 jest.mock("@middlewares/auth", () => ({
   auth: (_req: any, _res: any, next: () => void) => next(),
   authAdmin: (_req: any, _res: any, next: () => void) => next(),
+  requireSessionAccess: (_req: any, _res: any, next: () => void) => next(),
 }));
 
 const baseUri = "/api/v1/measurementTypes";
