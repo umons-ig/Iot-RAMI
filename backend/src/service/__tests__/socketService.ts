@@ -528,4 +528,52 @@ describe("SocketService", () => {
       expect((db as any).Threshold.findAll).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ── watchdog « capteur muet » (§4.2) ─────────────────────────────────────
+  describe("checkSilentSensors", () => {
+    let emitMock: jest.Mock;
+    let toMock: jest.Mock;
+    const topic = "sensor-test/sensor";
+
+    beforeEach(() => {
+      emitMock = jest.fn();
+      toMock = jest.fn().mockReturnValue({ emit: emitMock });
+      (service as any).io = { to: toMock };
+      (service as any).activeSessions = new Map([[topic, "session-uuid"]]);
+      (service as any).lastDataAt = new Map();
+      (service as any).silentTopics = new Set();
+    });
+
+    it("émet sensor-silent quand aucune donnée depuis le seuil", () => {
+      const now = 1_000_000;
+      (service as any).lastDataAt.set(topic, now - 20_000); // 20s > seuil 15s
+
+      (service as any).checkSilentSensors(now);
+
+      expect(toMock).toHaveBeenCalledWith(topic);
+      expect(emitMock).toHaveBeenCalledWith(
+        "sensor-silent",
+        expect.objectContaining({ sensorTopic: topic })
+      );
+    });
+
+    it("n'émet pas tant que le seuil n'est pas dépassé", () => {
+      const now = 1_000_000;
+      (service as any).lastDataAt.set(topic, now - 5_000); // 5s < seuil
+
+      (service as any).checkSilentSensors(now);
+
+      expect(emitMock).not.toHaveBeenCalled();
+    });
+
+    it("n'émet qu'une seule fois tant que le capteur reste muet (anti-spam)", () => {
+      const now = 1_000_000;
+      (service as any).lastDataAt.set(topic, now - 20_000);
+
+      (service as any).checkSilentSensors(now);
+      (service as any).checkSilentSensors(now + 5_000);
+
+      expect(emitMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
