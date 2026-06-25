@@ -110,7 +110,8 @@
 						aria-label="Nom de la nouvelle équipe" />
 					<button
 						class="create-btn"
-						type="submit">
+						type="submit"
+						aria-label="Créer l'équipe">
 						+
 					</button>
 				</form>
@@ -127,6 +128,7 @@
 							<button
 								class="team-del"
 								title="Supprimer"
+								aria-label="Supprimer l'équipe"
 								@click.stop="remove(t)">
 								✕
 							</button>
@@ -183,6 +185,7 @@
 							<span>{{ m.firstName }} {{ m.lastName }}</span>
 							<button
 								class="member-x"
+								aria-label="Retirer le membre"
 								@click="dropMember(m.id)">
 								✕
 							</button>

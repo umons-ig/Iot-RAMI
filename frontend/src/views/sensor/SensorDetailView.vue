@@ -164,12 +164,14 @@
 							<button
 								class="threshold-btn"
 								title="Modifier"
+								aria-label="Modifier le seuil"
 								@click="editThreshold(t)">
 								✎
 							</button>
 							<button
 								class="threshold-btn threshold-btn--danger btn-danger"
 								title="Supprimer"
+								aria-label="Supprimer le seuil"
 								@click="removeThreshold(t.id)">
 								✕
 							</button>
@@ -460,7 +462,7 @@
 
 	.threshold-badge--max {
 		background: var(--color-danger-dim);
-		border: 1px solid rgba(255, 64, 64, 0.4);
+		border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
 		color: var(--color-danger);
 	}
 

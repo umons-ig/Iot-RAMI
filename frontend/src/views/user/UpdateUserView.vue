@@ -1,5 +1,19 @@
 <template>
 	<div class="update-information-view">
+		<div class="view-header">
+			<div class="view-header-left">
+				<div class="view-breadcrumb">
+					<span>RAMI</span>
+					<span class="breadcrumb-sep">/</span>
+					<span>PROFIL</span>
+					<span class="breadcrumb-sep">/</span>
+					<span class="breadcrumb-current">MODIFIER</span>
+				</div>
+				<h1 class="view-title">MODIFIER MON PROFIL</h1>
+				<span class="view-sub">INFORMATIONS & MOT DE PASSE</span>
+			</div>
+		</div>
+
 		<div class="toggle-container">
 			<label class="switch">
 				<input

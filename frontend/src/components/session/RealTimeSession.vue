@@ -228,7 +228,7 @@
 	}
 
 	.step-block--done {
-		border-left: 2px solid rgba(57, 255, 20, 0.4);
+		border-left: 2px solid color-mix(in srgb, var(--color-success) 40%, transparent);
 	}
 
 	.step-header {
@@ -248,7 +248,7 @@
 	}
 
 	.step-header:hover {
-		background: rgba(255, 159, 10, 0.05);
+		background: color-mix(in srgb, var(--color-primary) 5%, transparent);
 	}
 
 	.step-label {
@@ -415,7 +415,7 @@
 		letter-spacing: 0.15em;
 		text-transform: uppercase;
 		color: var(--color-danger);
-		border: 1px solid rgba(255, 64, 64, 0.35);
+		border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
 		padding: 3px 9px;
 		background: var(--color-danger-dim);
 	}

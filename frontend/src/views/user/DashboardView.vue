@@ -272,7 +272,7 @@
 		left: -100%;
 		width: 60%;
 		height: 100%;
-		background: linear-gradient(to right, transparent, rgba(255, 159, 10, 0.8), transparent);
+		background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-primary) 80%, transparent), transparent);
 		animation: line-scan 3s ease-in-out infinite 0.5s;
 	}
 

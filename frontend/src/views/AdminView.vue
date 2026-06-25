@@ -40,6 +40,11 @@
 	<div class="admin">
 		<!-- Titre -->
 		<div class="admin-title-block">
+			<div class="view-breadcrumb">
+				<span>RAMI</span>
+				<span class="breadcrumb-sep">/</span>
+				<span class="breadcrumb-current">ADMIN</span>
+			</div>
 			<h1>ADMINISTRATION</h1>
 			<span class="admin-sub">PANNEAU DE CONTRÔLE SYSTÈME</span>
 		</div>

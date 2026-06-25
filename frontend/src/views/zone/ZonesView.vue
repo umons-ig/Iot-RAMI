@@ -522,6 +522,7 @@
 								v-if="isAdmin"
 								class="chip-detach"
 								title="Détacher de la zone"
+								aria-label="Détacher le capteur de la zone"
 								@click="detach(s)">
 								✕
 							</button>

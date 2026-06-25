@@ -1,5 +1,16 @@
 <template>
 	<div class="users-sessions-view">
+		<div class="view-header">
+			<div class="view-header-left">
+				<div class="view-breadcrumb">
+					<span>RAMI</span>
+					<span class="breadcrumb-sep">/</span>
+					<span class="breadcrumb-current">UTILISATEURS</span>
+				</div>
+				<h1 class="view-title">UTILISATEURS & SESSIONS</h1>
+				<span class="view-sub">SESSIONS PAR UTILISATEUR</span>
+			</div>
+		</div>
 		<div class="users-list-container">
 			<UsersList />
 		</div>

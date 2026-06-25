@@ -338,3 +338,63 @@ body {
   }
   :root[data-crt='on'] body::after { animation: none; }
 }
+
+/* ════════════════════════════════════════════════════════
+   EN-TÊTE DE VUE — pattern partagé (RAMI / SECTION + titre)
+   Classes globales pour que toutes les vues soient cohérentes.
+   ════════════════════════════════════════════════════════ */
+.view-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding-bottom: 1rem;
+    flex-wrap: wrap;
+    position: relative;
+}
+.view-header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, var(--color-primary) 0%, var(--color-border) 40%, transparent 100%);
+}
+.view-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.view-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.14em;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+}
+.view-breadcrumb .breadcrumb-sep { opacity: 0.4; }
+.view-breadcrumb .breadcrumb-current { color: var(--color-primary); }
+.view-title {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--color-text);
+    text-shadow: 0 0 30px var(--color-primary-glow);
+}
+.view-sub {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--color-text-muted);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-top: 4px;
+    display: block;
+}

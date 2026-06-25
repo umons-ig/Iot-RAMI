@@ -95,19 +95,19 @@ p {
 .badge-success {
     background: var(--color-success-dim);
     color: var(--color-success);
-    border: 1px solid rgba(57, 255, 20, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
 }
 
 .badge-danger {
     background: var(--color-danger-dim);
     color: var(--color-danger);
-    border: 1px solid rgba(255, 64, 64, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 }
 
 .badge-primary {
     background: var(--color-primary-dim);
     color: var(--color-primary);
-    border: 1px solid rgba(255, 159, 10, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
 /* ── Cartes ── */
@@ -149,7 +149,7 @@ p {
 .btn-danger {
     background: var(--color-danger-dim);
     color: var(--color-danger);
-    border: 1px solid rgba(255, 64, 64, 0.35);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
     padding: 0.55rem 1.2rem;
     font-weight: 700;
     font-size: 0.78rem;

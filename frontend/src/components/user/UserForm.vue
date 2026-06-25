@@ -94,7 +94,7 @@
 		background: var(--color-surface-secondary);
 		color: var(--color-text);
 		border: 1px solid var(--color-border);
-		border-radius: 8px;
+		border-radius: 0;
 		font-size: 0.9rem;
 		width: 100%;
 	}
@@ -120,9 +120,9 @@
 	.btn-submit {
 		padding: 9px 20px;
 		background: var(--color-primary);
-		color: white;
+		color: var(--color-text-second);
 		border: none;
-		border-radius: 8px;
+		border-radius: 0;
 		font-size: 0.875rem;
 		font-weight: 600;
 		cursor: pointer;

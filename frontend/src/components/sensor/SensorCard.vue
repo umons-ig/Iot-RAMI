@@ -334,7 +334,7 @@
 	.status-publishing .status-tag {
 		color: var(--color-warning);
 		border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
-		background: rgba(255, 204, 0, 0.08);
+		background: color-mix(in srgb, var(--color-warning) 8%, transparent);
 		animation: blink-tag 0.9s ease-in-out infinite;
 	}
 
@@ -354,7 +354,7 @@
 	}
 	.status-offline .status-tag {
 		color: var(--color-danger);
-		border-color: rgba(255, 64, 64, 0.3);
+		border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
 		background: var(--color-danger-dim);
 	}
 

@@ -70,8 +70,9 @@
 <style scoped>
 	.users-list-view {
 		background-color: var(--color-surface);
-		border-radius: 10px;
-		box-shadow: 0 2px 5px var(--color-shadow);
+		border: 1px solid var(--color-border);
+		border-radius: 0;
+		box-shadow: 0 0 8px var(--color-shadow);
 		padding: 20px;
 		width: 100%;
 		max-height: 410px;

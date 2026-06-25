@@ -269,7 +269,7 @@
 		font-weight: 900;
 		color: var(--color-primary);
 		letter-spacing: 0.12em;
-		text-shadow: 0 0 24px var(--color-primary-glow), 0 0 2px rgba(255, 159, 10, 0.4);
+		text-shadow: 0 0 24px var(--color-primary-glow), 0 0 2px color-mix(in srgb, var(--color-primary) 40%, transparent);
 		line-height: 1;
 	}
 
@@ -348,7 +348,7 @@
 		background-color: var(--color-primary-dim);
 		border-left-color: var(--color-primary);
 		font-weight: 700;
-		box-shadow: inset 0 0 24px rgba(255, 159, 10, 0.08);
+		box-shadow: inset 0 0 24px var(--color-primary-dim);
 		text-shadow: 0 0 8px var(--color-primary-glow);
 	}
 
@@ -488,10 +488,10 @@
 	@keyframes alert-pulse {
 		0%,
 		100% {
-			box-shadow: 0 0 4px rgba(255, 64, 64, 0.3);
+			box-shadow: 0 0 4px color-mix(in srgb, var(--color-danger) 30%, transparent);
 		}
 		50% {
-			box-shadow: 0 0 10px rgba(255, 64, 64, 0.6);
+			box-shadow: 0 0 10px color-mix(in srgb, var(--color-danger) 60%, transparent);
 		}
 	}
 
@@ -628,7 +628,7 @@
 		background-color: var(--color-danger-dim);
 		border-color: var(--color-danger);
 		color: var(--color-danger);
-		box-shadow: 0 0 10px rgba(255, 64, 64, 0.15);
+		box-shadow: 0 0 10px color-mix(in srgb, var(--color-danger) 15%, transparent);
 	}
 
 	/* ── Hamburger ── */
