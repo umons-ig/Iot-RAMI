@@ -51,14 +51,19 @@
 </template>
 
 <script lang="ts">
-	import { defineComponent, inject, onMounted, onUnmounted, ref, watch } from "vue"
+	import { defineComponent, inject, onMounted, onUnmounted, nextTick, ref, watch } from "vue"
 	import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, type ChartOptions, type ChartData } from "chart.js"
 	import { Line as LineChart } from "vue-chartjs"
 	import zoomPlugin from "chartjs-plugin-zoom"
 	import "chartjs-adapter-date-fns"
 	import { EventTypes, handleEvent } from "@/composables/useUser.composable"
+	import { useTheme } from "@/composables/useTheme.composable"
 	import type { Threshold } from "@/composables/useThreshold.composable"
 
+	// NB : la décimation Chart.js (LTTB) nécessite `parsing:false`, incompatible
+	// avec les datasets de seuils (tableaux plats indexés sur labels). Reportée
+	// (cf. PLAN_AMELIORATIONS §2.2) — l'historique s'appuie déjà sur le
+	// sous-échantillonnage backend (maxPoints).
 	ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, TimeScale, zoomPlugin)
 
 	// Palette ambre phosphore pour les datasets multiples
@@ -108,7 +113,9 @@
 				},
 				elements: {
 					line: {
-						tension: 0.2,
+						// Courbes droites en temps réel : les splines Bézier coûtent
+						// cher à chaque frame. Lissage conservé pour l'historique. §2.2
+						tension: props.isRealTime ? 0 : 0.2,
 						borderWidth: 2,
 					},
 					point: {
@@ -299,6 +306,38 @@
 			const handleSessionSelected = (session: { id: string; startDate: string; endDate: string }) => {
 				chooseNewXScale(session.startDate, session.endDate)
 			}
+
+			// Couleurs (grille, axes, légende, tooltip) relues depuis les variables
+			// CSS et réappliquées au changement de thème — avant, elles étaient
+			// figées à la création du graphe et ne suivaient pas dark/light/CRT. §2.3
+			const applyThemeColors = () => {
+				const grid = cssVar("--color-primary-dim") || "rgba(255,159,10,0.07)"
+				const borderColor = cssVar("--color-border-bright") || "rgba(255,159,10,0.2)"
+				const muted = cssVar("--color-text-muted") || "#7a6535"
+				const scales = chartOptions.scales as any
+				if (scales?.x) {
+					scales.x.grid.color = grid
+					scales.x.border.color = borderColor
+					scales.x.ticks.color = muted
+				}
+				if (scales?.y) {
+					scales.y.grid.color = grid
+					scales.y.border.color = borderColor
+					scales.y.ticks.color = muted
+				}
+				const plugins = chartOptions.plugins as any
+				if (plugins?.legend) plugins.legend.labels.color = muted
+				if (plugins?.tooltip) {
+					plugins.tooltip.backgroundColor = cssVar("--color-surface") || "#0f0c00"
+					plugins.tooltip.borderColor = cssVar("--color-border") || "#241c00"
+					plugins.tooltip.titleColor = cssVar("--color-primary") || "#ff9f0a"
+					plugins.tooltip.bodyColor = cssVar("--color-text") || "#f0d89a"
+				}
+				;(chartRef.value?.chart as ChartJS | undefined)?.update("none")
+			}
+
+			const { theme } = useTheme()
+			watch(theme, () => nextTick().then(applyThemeColors))
 
 			onMounted(() => {
 				applyDatasetColors()
