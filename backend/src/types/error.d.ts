@@ -168,7 +168,10 @@ type AuthErrors =
 type APIThresholdErrors =
   | "threshold.not.found"
   | "threshold.missing.fields"
-  | "threshold.already.exists";
+  | "threshold.already.exists"
+  | "threshold.invalid.id"
+  | "threshold.invalid.value"
+  | "threshold.invalid.range";
 
 type APIZoneErrors =
   | "zone.name.required"
