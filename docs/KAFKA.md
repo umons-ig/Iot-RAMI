@@ -211,12 +211,18 @@ Metrique : latence `kafka_message_processing_seconds` p95 (Prometheus).
 
 Le pool de connexions PostgreSQL est configure a `max: 20` (valeur par defaut Sequelize : 5). Ce reglage est necessaire pour absorber les rafales de messages Kafka sans bloquer sur l'acquisition d'une connexion DB.
 
-### Commandes de seed sans donnees de test de charge
+### Capteurs de test de charge
 
-Apres les tests de charge, la base contient jusqu'a 101 capteurs fictifs (`load-test-0` a `load-test-100`). Pour reinitialiser la base sans ces capteurs :
+Les 101 capteurs fictifs (`load-test-0` a `load-test-100`) ne sont **plus seedes par defaut** : `npm run seed` et `npm run init-db` n'incluent que les donnees utiles (utilisateur, types de mesure). Le seeder load-test est isole dans `src/db/seeders-loadtest/`.
+
+Pour une campagne de tests de charge, on les injecte puis on les retire :
 
 ```bash
 # Dans backend/
-npm run seed:no-load-test       # Seed uniquement user + measurement types
-npm run init-db:no-load-test    # Reset + migrate + seed sans capteurs load-test
+npm run seed:load-test          # Injecte les 101 capteurs load-test
+npm run seed:undo:load-test     # Les retire apres les tests
+
+# Variantes Docker (conteneur backend) :
+npm run docker:seed:load-test
+npm run docker:seed:undo:load-test
 ```
