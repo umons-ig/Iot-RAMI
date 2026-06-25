@@ -1,0 +1,11 @@
+# Provisioning automatique de la datasource Prometheus (PLAN_AMELIORATIONS §3.3).
+# Évite la configuration manuelle décrite dans docs/MONITORING.md.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true

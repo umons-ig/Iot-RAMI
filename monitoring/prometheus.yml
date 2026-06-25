@@ -1,6 +1,15 @@
 global:
   scrape_interval: 15s
 
+# Règles d'alerte (§3.2) et routage vers Alertmanager.
+rule_files:
+  - "alert.rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   - job_name: 'rami-backend'
     static_configs:

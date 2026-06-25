@@ -1,0 +1,34 @@
+# Configuration Alertmanager minimale (PLAN_AMELIORATIONS §3.2).
+#
+# Par défaut, les alertes sont seulement groupées/journalisées (receiver vide).
+# Pour une notification réelle, décommenter et configurer un receiver
+# (e-mail SMTP, Slack, webhook…). Exemple e-mail fourni en commentaire.
+
+route:
+  receiver: "default"
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: "default"
+    # Aucun notifieur configuré par défaut : les alertes restent visibles dans
+    # l'UI Alertmanager. Configurer ci-dessous selon le canal souhaité.
+    #
+    # email_configs:
+    #   - to: "ops@example.com"
+    #     from: "rami-alertmanager@example.com"
+    #     smarthost: "smtp.example.com:587"
+    #     auth_username: "..."
+    #     auth_password: "..."
+    #
+    # slack_configs:
+    #   - api_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+    #     channel: "#rami-alerts"
+
+inhibit_rules:
+  # Une alerte critique inhibe les warnings du même alertname.
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ["alertname"]

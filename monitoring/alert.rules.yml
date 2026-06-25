@@ -1,0 +1,55 @@
+groups:
+  - name: rami-core
+    rules:
+      # Le backend ne répond plus au scrape Prometheus.
+      - alert: RamiBackendDown
+        expr: up{job="rami-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend RAMI injoignable"
+          description: "La cible {{ $labels.instance }} ne répond plus depuis 2 min."
+
+      # Latence de traitement Kafka élevée (p95) — accumulation possible.
+      - alert: RamiHighKafkaProcessingLatency
+        expr: histogram_quantile(0.95, sum(rate(kafka_message_processing_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latence de traitement Kafka p95 élevée"
+          description: "p95 > 500 ms depuis 5 min — vérifier la pression DB (flush WAL)."
+
+  # Règles fog : actives une fois le scrape du fog activé (cf. prometheus.yml §3.1).
+  - name: rami-fog
+    rules:
+      # Lag store-and-forward croissant : le fog n'arrive plus à drainer vers Kafka.
+      - alert: RamiFogOutboxBacklog
+        expr: fog_outbox_pending > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backlog outbox fog élevé"
+          description: "{{ $value }} événements en attente de réplication depuis 5 min."
+
+      # Le producteur Kafka du fog est déconnecté.
+      - alert: RamiFogKafkaDisconnected
+        expr: fog_kafka_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fog déconnecté de Kafka"
+          description: "Le producteur Kafka du fog est down depuis 2 min (accumulation outbox)."
+
+      # Des messages sont droppés (buffer mémoire plein).
+      - alert: RamiFogBufferDrops
+        expr: increase(fog_buffer_drops_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drops buffer fog"
+          description: "Le fog droppe des messages (buffer plein) — débit entrant > capacité."
