@@ -4,7 +4,7 @@ import app from "@/app";
 // Model(s) import
 import db from "@db/index";
 const DB: any = db;
-const { Sensor: SensorModel, Session: SessionModel } = DB;
+const { Sensor: SensorModel } = DB;
 // --- End of model(s) import
 
 jest.mock("@db/index", () => ({
@@ -27,9 +27,14 @@ jest.mock("@db/index", () => ({
   },
 }));
 
-// Bypass auth middlewares so controller logic is tested in isolation
+// Bypass auth middlewares so controller logic is tested in isolation.
+// On injecte un user admin pour que les listes (getAll*) ne soient pas filtrées
+// par accès capteur — le filtrage est testé unitairement dans sensorAccess.
 jest.mock("@middlewares/auth", () => ({
-  auth: (_req: any, _res: any, next: () => void) => next(),
+  auth: (req: any, _res: any, next: () => void) => {
+    req.user = { userId: "test-admin", role: "admin" };
+    next();
+  },
   authAdmin: (_req: any, _res: any, next: () => void) => next(),
   requireSessionAccess: (_req: any, _res: any, next: () => void) => next(),
 }));
