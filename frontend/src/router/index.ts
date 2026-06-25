@@ -91,6 +91,14 @@ const router = createRouter({
 				requiresAuth: true,
 			},
 		},
+		{
+			path: "/zones",
+			name: "zones",
+			component: () => import("@/views/zone/ZonesView.vue"),
+			meta: {
+				requiresAuth: true,
+			},
+		},
 	],
 })
 

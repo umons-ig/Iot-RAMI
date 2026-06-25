@@ -167,6 +167,14 @@ type APIThresholdErrors =
   | "threshold.missing.fields"
   | "threshold.already.exists";
 
+type APIZoneErrors =
+  | "zone.name.required"
+  | "zone.parent.invalid"
+  | "zone.parent.cycle"
+  | "zone.not.found"
+  | "zone.not.empty"
+  | "zone.sensor.required";
+
 type APIServerErrors = "server.error" | "resource.not.found";
 
 type APIErrors =
@@ -179,6 +187,7 @@ type APIErrors =
   | APIUserErrors
   | AuthErrors
   | APIUserSensorErrors
-  | APIThresholdErrors;
+  | APIThresholdErrors
+  | APIZoneErrors;
 
 export { APIErrors };

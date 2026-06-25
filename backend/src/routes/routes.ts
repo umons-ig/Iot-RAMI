@@ -6,9 +6,11 @@ import { homeRoutes } from "@routes/home";
 import { userRoutes } from "@routes/user";
 import { authRoutes } from "@routes/auth";
 import { thresholdRoutes } from "@routes/threshold";
+import { zoneRoutes } from "@routes/zone";
 
 const routes = [
   { path: "/sensors", handler: sensorRoutes },
+  { path: "/zones", handler: zoneRoutes },
   { path: "/sessions", handler: sessionRoutes },
   { path: "/measurementTypes", handler: measurementTypeRoutes },
   { path: "/measurements", handler: measurementRoutes },

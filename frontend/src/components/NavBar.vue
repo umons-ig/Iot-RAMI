@@ -190,6 +190,7 @@
 			const items: MenuItem[] = [
 				{ path: "/home", name: "Dashboard", icon: "◈" },
 				{ path: "/sensors", name: "Mes capteurs", icon: "⬡" },
+				{ path: "/zones", name: "Zones", icon: "▦" },
 				{ path: "/history", name: "Historique", icon: "⊞" },
 				{ path: "/user", name: "Mon profil", icon: "◎" },
 			]

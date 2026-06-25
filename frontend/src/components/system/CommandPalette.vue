@@ -50,6 +50,7 @@
 		const base: Command[] = [
 			{ id: "nav-home", label: "Tableau de bord", hint: "/home", group: "Navigation", glyph: "◈", keywords: "dashboard accueil", run: () => go("/home") },
 			{ id: "nav-sensors", label: "Mes capteurs", hint: "/sensors", group: "Navigation", glyph: "⬡", keywords: "sensors devices", run: () => go("/sensors") },
+			{ id: "nav-zones", label: "Zones", hint: "/zones", group: "Navigation", glyph: "▦", keywords: "zones batiment etage piece localisation parc", run: () => go("/zones") },
 			{ id: "nav-history", label: "Historique", hint: "/history", group: "Navigation", glyph: "⊞", keywords: "history sessions comparaison", run: () => go("/history") },
 			{ id: "nav-profile", label: "Mon profil", hint: "/user", group: "Navigation", glyph: "◎", keywords: "profile compte account", run: () => go("/user") },
 		]

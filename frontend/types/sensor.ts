@@ -12,6 +12,7 @@ interface Sensor {
 	[SensorFields.TOPIC]: string
 	[SensorFields.CREATED_AT]: string
 	[SensorFields.UPDATED_AT]: string
+	zoneId?: string | null
 }
 
 // routes Path

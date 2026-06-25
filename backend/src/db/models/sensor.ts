@@ -23,6 +23,11 @@ const defineSensorModel = (
         allowNull: false,
         unique: true,
       },
+      // Zone-feuille à laquelle le capteur est rattaché (null = non classé).
+      zoneId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+      },
       createdAt: {
         type: DataTypes.DATE,
         allowNull: false,
@@ -51,6 +56,8 @@ const defineSensorModel = (
     });
 
     Sensor.hasMany(models.Session, { foreignKey: "idSensor" });
+
+    Sensor.belongsTo(models.Zone, { foreignKey: "zoneId", targetKey: "id" });
   };
 
   return Sensor;
