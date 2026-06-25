@@ -17,10 +17,6 @@ enum SessionControllerPaths {
 	GET_SESSION_AGGREGATE = "sessions/:id/aggregate",
 }
 
-const isValidDate = (date: any): date is Date => {
-	return date instanceof Date && !isNaN(date.getTime())
-}
-
 const getCorrectUrl = (url: string, parameterToReplace: string, parameterValue: string | null): string => {
 	if (parameterValue) {
 		return url.replace(parameterToReplace, parameterValue)
@@ -276,21 +272,6 @@ const useSession = () => {
 		return socket
 	}
 	// *************************** [METHOD]  GRAPH SESSION (both realtime and non realtime)
-
-	const updateChartWithNewValues = (newLabels: string[], newData: { x: Date; y: number }[]) => {
-		chartData.value = {
-			labels: newLabels,
-			datasets: [
-				{
-					label: chartData.value.datasets[0].label,
-					backgroundColor: chartData.value.datasets[0].backgroundColor,
-					borderColor: chartData.value.datasets[0].borderColor,
-					fill: false,
-					data: newData,
-				},
-			],
-		}
-	}
 
 	const DATASET_COLORS = [
 		{ bg: "rgba(75, 192, 192, 0.5)", border: "rgba(75, 192, 192, 1)" },
