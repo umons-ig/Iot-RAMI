@@ -72,9 +72,10 @@
 				<div class="step-header-right">
 					<span
 						v-if="activeStep === 3"
-						class="badge-live">
+						class="badge-live"
+						:class="`badge-live--${connectionState}`">
 						<span class="live-dot" />
-						LIVE
+						{{ connectionLabel }}
 					</span>
 					<span
 						class="step-arrow"
@@ -108,7 +109,7 @@
 </template>
 
 <script lang="ts">
-	import { ref, provide, defineComponent, onMounted, onUnmounted } from "vue"
+	import { ref, computed, provide, defineComponent, onMounted, onUnmounted } from "vue"
 	import Graph from "@/components/session/Graph.vue"
 	import SensorsList from "@/components/sensor/SensorsList.vue"
 	import { EventTypes, handleEvent } from "@/composables/useUser.composable"
@@ -119,8 +120,20 @@
 		name: "CreateSession",
 		components: { Graph, SensorsList },
 		setup() {
-			const { idSensor, chartData, timeSinceLastValue, transmissionSpeed, checkAndJoinActiveSession } = useSession()
+			const { idSensor, chartData, timeSinceLastValue, transmissionSpeed, connectionState, checkAndJoinActiveSession } = useSession()
 			const { axios } = useAxios()
+
+			// Libellé du badge temps réel selon l'état de connexion (cf. §1.6).
+			const connectionLabel = computed(() => {
+				switch (connectionState.value) {
+					case "connected":
+						return "LIVE"
+					case "reconnecting":
+						return "RECONNEXION…"
+					default:
+						return "SIGNAL PERDU"
+				}
+			})
 
 			const activeStep = ref(1)
 			const selectedSensorName = ref("")
@@ -167,6 +180,8 @@
 				chartData,
 				timeSinceLastValue,
 				transmissionSpeed,
+				connectionState,
+				connectionLabel,
 				toggleStep,
 			}
 		},
@@ -420,6 +435,29 @@
 		background: var(--color-danger-dim);
 	}
 
+	/* RECONNEXION… : la liaison temps réel est perdue mais socket.io retente. */
+	.badge-live--reconnecting {
+		color: var(--color-warning);
+		border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+		background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+	}
+	.badge-live--reconnecting .live-dot {
+		background: var(--color-warning);
+		box-shadow: 0 0 5px var(--color-warning);
+	}
+
+	/* SIGNAL PERDU : déconnexion explicite / pas de reconnexion. */
+	.badge-live--disconnected {
+		color: var(--color-text-secondary, #888);
+		border-color: color-mix(in srgb, currentColor 35%, transparent);
+		background: transparent;
+	}
+	.badge-live--disconnected .live-dot {
+		background: currentColor;
+		box-shadow: none;
+		animation: none;
+	}
+
 	.live-dot {
 		width: 6px;
 		height: 6px;
@@ -436,6 +474,13 @@
 		}
 		50% {
 			opacity: 0.2;
+		}
+	}
+
+	/* Respecte la préférence système de réduction des animations. */
+	@media (prefers-reduced-motion: reduce) {
+		.live-dot {
+			animation: none;
 		}
 	}
 
