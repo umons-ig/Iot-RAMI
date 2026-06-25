@@ -1,23 +1,13 @@
 <script lang="ts" setup>
 	import { ref, computed, onMounted } from "vue"
-	import type { Zone, ZoneTreeNode } from "#/zone"
+	import type { ZoneTreeNode } from "#/zone"
 	import type { Sensor } from "#/sensor"
 	import ZoneTree from "@/components/zone/ZoneTree.vue"
 	import { useZone } from "@/composables/useZone.composable"
 	import { useAxios } from "@/composables/useAxios.composable"
 	import { useToast } from "@/composables/useToast.composable"
 
-	const {
-		tree,
-		zoneSensors,
-		loading,
-		fetchTree,
-		fetchZoneSensors,
-		createZone,
-		updateZone,
-		deleteZone,
-		assignSensor,
-	} = useZone()
+	const { tree, zoneSensors, loading, fetchTree, fetchZoneSensors, createZone, updateZone, deleteZone, assignSensor } = useZone()
 	const { axios } = useAxios()
 	const toast = useToast()
 
@@ -111,9 +101,7 @@
 
 	async function removeZone(node: ZoneTreeNode) {
 		const hasContent = node.children.length > 0 || node.sensorCount > 0
-		const msg = hasContent
-			? `« ${node.name} » contient des sous-zones et/ou des capteurs. Supprimer en cascade ?`
-			: `Supprimer la zone « ${node.name} » ?`
+		const msg = hasContent ? `« ${node.name} » contient des sous-zones et/ou des capteurs. Supprimer en cascade ?` : `Supprimer la zone « ${node.name} » ?`
 		if (!window.confirm(msg)) return
 		try {
 			await deleteZone(node.id, hasContent)
@@ -365,8 +353,12 @@
 		color: var(--color-text-muted);
 		text-transform: uppercase;
 	}
-	.breadcrumb-sep { opacity: 0.4; }
-	.breadcrumb-current { color: var(--color-primary); }
+	.breadcrumb-sep {
+		opacity: 0.4;
+	}
+	.breadcrumb-current {
+		color: var(--color-primary);
+	}
 	.view-title {
 		font-family: var(--font-display);
 		font-size: 2.4rem;
@@ -398,7 +390,9 @@
 		cursor: pointer;
 		transition: box-shadow var(--dur-fast);
 	}
-	.btn-root:hover { box-shadow: 0 0 14px var(--color-primary-glow); }
+	.btn-root:hover {
+		box-shadow: 0 0 14px var(--color-primary-glow);
+	}
 
 	/* Split */
 	.zones-split {
@@ -425,7 +419,9 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 
-	.zones-tree-panel :deep(.ztree) { padding: 0.5rem; }
+	.zones-tree-panel :deep(.ztree) {
+		padding: 0.5rem;
+	}
 
 	.panel-empty,
 	.detail-placeholder {
@@ -446,8 +442,13 @@
 		animation: pulse-soft 2.5s ease-in-out infinite;
 	}
 	@keyframes pulse-soft {
-		0%, 100% { opacity: 0.5; }
-		50% { opacity: 0.85; }
+		0%,
+		100% {
+			opacity: 0.5;
+		}
+		50% {
+			opacity: 0.85;
+		}
 	}
 
 	/* Détail */
@@ -520,7 +521,10 @@
 		letter-spacing: 0.08em;
 		cursor: pointer;
 	}
-	.btn-assign:disabled { opacity: 0.4; cursor: not-allowed; }
+	.btn-assign:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
 
 	.sensor-grid {
 		list-style: none;
@@ -556,7 +560,9 @@
 		font-size: 0.6rem;
 		padding: 0;
 	}
-	.chip-detach:hover { color: var(--color-danger); }
+	.chip-detach:hover {
+		color: var(--color-danger);
+	}
 
 	/* Modale */
 	.zmodal-backdrop {
@@ -626,20 +632,30 @@
 		background: none;
 		color: var(--color-text-muted);
 	}
-	.btn-ghost:hover { color: var(--color-text); }
+	.btn-ghost:hover {
+		color: var(--color-text);
+	}
 	.btn-primary {
 		border-color: var(--color-primary);
 		background: var(--color-primary-dim);
 		color: var(--color-primary);
 	}
-	.btn-primary:hover { box-shadow: 0 0 14px var(--color-primary-glow); }
+	.btn-primary:hover {
+		box-shadow: 0 0 14px var(--color-primary-glow);
+	}
 
 	.zmodal-enter-active,
-	.zmodal-leave-active { transition: opacity var(--dur-base); }
+	.zmodal-leave-active {
+		transition: opacity var(--dur-base);
+	}
 	.zmodal-enter-from,
-	.zmodal-leave-to { opacity: 0; }
+	.zmodal-leave-to {
+		opacity: 0;
+	}
 
 	@media (max-width: 760px) {
-		.zones-split { grid-template-columns: 1fr; }
+		.zones-split {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

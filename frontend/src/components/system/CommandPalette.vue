@@ -57,7 +57,7 @@
 		if (isAdmin) {
 			base.push(
 				{ id: "nav-users", label: "Utilisateurs", hint: "/users/all", group: "Navigation", glyph: "⬟", keywords: "users admin", run: () => go("/users/all") },
-				{ id: "nav-admin", label: "Administration", hint: "/admin", group: "Navigation", glyph: "⬠", keywords: "admin panel", run: () => go("/admin") },
+				{ id: "nav-admin", label: "Administration", hint: "/admin", group: "Navigation", glyph: "⬠", keywords: "admin panel", run: () => go("/admin") }
 			)
 		}
 		base.push(
@@ -65,8 +65,30 @@
 			{ id: "th-green", label: "Thème : Vert oscilloscope", hint: "green", group: "Apparence", glyph: "●", keywords: "theme couleur vert green", run: () => pickTheme("green", "Vert oscilloscope") },
 			{ id: "th-light", label: "Thème : Parchemin", hint: "light", group: "Apparence", glyph: "○", keywords: "theme clair light parchemin", run: () => pickTheme("light", "Parchemin") },
 			{ id: "th-system", label: "Thème : Système", hint: "system", group: "Apparence", glyph: "◐", keywords: "theme auto system os", run: () => pickTheme("system", "Préférence système") },
-			{ id: "crt", label: crtEnabled.value ? "Désactiver l'effet CRT" : "Activer l'effet CRT", hint: "scanlines", group: "Apparence", glyph: "▤", keywords: "crt scanlines retro flicker", run: () => { toggleCrt(); toast.info("Effet CRT", crtEnabled.value ? "Activé" : "Désactivé") } },
-			{ id: "logout", label: "Déconnexion", hint: "exit", group: "Système", glyph: "⏻", keywords: "logout deconnexion exit", run: () => { cleanUserLocalStorage(); router.push("/") } },
+			{
+				id: "crt",
+				label: crtEnabled.value ? "Désactiver l'effet CRT" : "Activer l'effet CRT",
+				hint: "scanlines",
+				group: "Apparence",
+				glyph: "▤",
+				keywords: "crt scanlines retro flicker",
+				run: () => {
+					toggleCrt()
+					toast.info("Effet CRT", crtEnabled.value ? "Activé" : "Désactivé")
+				},
+			},
+			{
+				id: "logout",
+				label: "Déconnexion",
+				hint: "exit",
+				group: "Système",
+				glyph: "⏻",
+				keywords: "logout deconnexion exit",
+				run: () => {
+					cleanUserLocalStorage()
+					router.push("/")
+				},
+			}
 		)
 		return base
 	})
@@ -74,15 +96,13 @@
 	const filtered = computed(() => {
 		const q = query.value.trim().toLowerCase()
 		if (!q) return commands.value
-		return commands.value.filter(c =>
-			(c.label + " " + c.hint + " " + (c.keywords ?? "")).toLowerCase().includes(q),
-		)
+		return commands.value.filter(c => (c.label + " " + c.hint + " " + (c.keywords ?? "")).toLowerCase().includes(q))
 	})
 
 	const grouped = computed(() => {
 		const groups: Record<string, Command[]> = {}
 		filtered.value.forEach(c => {
-			(groups[c.group] ??= []).push(c)
+			;(groups[c.group] ??= []).push(c)
 		})
 		return groups
 	})
@@ -117,10 +137,19 @@
 			return
 		}
 		if (!isOpen.value) return
-		if (e.key === "Escape") { e.preventDefault(); closePalette() }
-		else if (e.key === "ArrowDown") { e.preventDefault(); move(1) }
-		else if (e.key === "ArrowUp") { e.preventDefault(); move(-1) }
-		else if (e.key === "Enter") { e.preventDefault(); runActive() }
+		if (e.key === "Escape") {
+			e.preventDefault()
+			closePalette()
+		} else if (e.key === "ArrowDown") {
+			e.preventDefault()
+			move(1)
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault()
+			move(-1)
+		} else if (e.key === "Enter") {
+			e.preventDefault()
+			runActive()
+		}
 	}
 
 	function flatIndex(cmd: Command): number {
@@ -166,7 +195,10 @@
 							:key="cmd.id"
 							class="palette__item"
 							:class="{ active: flatIndex(cmd) === activeIndex }"
-							@click="closePalette(); cmd.run()"
+							@click="
+								closePalette()
+								cmd.run()
+							"
 							@mousemove="activeIndex = flatIndex(cmd)">
 							<span class="palette__glyph">{{ cmd.glyph }}</span>
 							<span class="palette__label">{{ cmd.label }}</span>
@@ -242,7 +274,9 @@
 		letter-spacing: 0.02em;
 		caret-color: var(--color-primary);
 	}
-	.palette__input::placeholder { color: var(--color-text-muted); }
+	.palette__input::placeholder {
+		color: var(--color-text-muted);
+	}
 
 	.palette__esc {
 		font-size: 0.55rem;
@@ -287,14 +321,25 @@
 		border-left-color: var(--color-primary);
 	}
 
-	.palette__glyph { width: 18px; text-align: center; flex-shrink: 0; }
-	.palette__label { flex: 1; font-size: 0.78rem; letter-spacing: 0.03em; }
+	.palette__glyph {
+		width: 18px;
+		text-align: center;
+		flex-shrink: 0;
+	}
+	.palette__label {
+		flex: 1;
+		font-size: 0.78rem;
+		letter-spacing: 0.03em;
+	}
 	.palette__hint {
 		font-size: 0.6rem;
 		color: var(--color-text-muted);
 		opacity: 0.7;
 	}
-	.palette__item.active .palette__hint { color: var(--color-primary); opacity: 0.8; }
+	.palette__item.active .palette__hint {
+		color: var(--color-primary);
+		opacity: 0.8;
+	}
 
 	.palette__empty {
 		padding: var(--space-6) var(--space-4);
@@ -321,9 +366,20 @@
 		font-size: 0.55rem;
 	}
 
-	.palette-enter-active { transition: opacity var(--dur-base) var(--ease-out); }
-	.palette-leave-active { transition: opacity var(--dur-fast) var(--ease-in-out); }
-	.palette-enter-from, .palette-leave-to { opacity: 0; }
-	.palette-enter-active .palette { transition: transform var(--dur-base) var(--ease-out); }
-	.palette-enter-from .palette { transform: translateY(-12px) scale(0.98); }
+	.palette-enter-active {
+		transition: opacity var(--dur-base) var(--ease-out);
+	}
+	.palette-leave-active {
+		transition: opacity var(--dur-fast) var(--ease-in-out);
+	}
+	.palette-enter-from,
+	.palette-leave-to {
+		opacity: 0;
+	}
+	.palette-enter-active .palette {
+		transition: transform var(--dur-base) var(--ease-out);
+	}
+	.palette-enter-from .palette {
+		transform: translateY(-12px) scale(0.98);
+	}
 </style>

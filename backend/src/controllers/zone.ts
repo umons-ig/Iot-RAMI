@@ -4,10 +4,7 @@ import db from "@db/index";
 const DB: any = db;
 const { Zone, Sensor } = DB;
 // --- End of model(s) import
-import {
-  BadRequestException,
-  NotFoundException,
-} from "@utils/exceptions";
+import { BadRequestException, NotFoundException } from "@utils/exceptions";
 
 interface ZoneRow {
   id: string;
@@ -21,10 +18,7 @@ interface ZoneRow {
  * Une seule requête DB + reconstruction O(n) en mémoire (suffisant pour
  * un parc de quelques centaines de zones).
  */
-const buildTree = (
-  zones: ZoneRow[],
-  sensorCounts: Record<string, number>
-) => {
+const buildTree = (zones: ZoneRow[], sensorCounts: Record<string, number>) => {
   const byId = new Map<string, any>();
   zones.forEach((z) => {
     byId.set(z.id, {
@@ -85,12 +79,10 @@ const getZones = async (_req: Request, res: Response) => {
 
 const getZoneTree = async (_req: Request, res: Response) => {
   try {
-    const zones: ZoneRow[] = (
-      await Zone.findAll({
-        attributes: ["id", "name", "type", "parentId"],
-        raw: true,
-      })
-    );
+    const zones: ZoneRow[] = await Zone.findAll({
+      attributes: ["id", "name", "type", "parentId"],
+      raw: true,
+    });
     // Compte des capteurs directs par zone.
     const sensors = await Sensor.findAll({
       attributes: ["zoneId"],
@@ -112,10 +104,7 @@ const getZone = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const zone = await Zone.findByPk(id, {
-      include: [
-        { model: Zone, as: "children" },
-        { model: Sensor },
-      ],
+      include: [{ model: Zone, as: "children" }, { model: Sensor }],
     });
     if (!zone) {
       throw new NotFoundException("Zone not found", "zone.not.found");
@@ -236,7 +225,10 @@ const assignSensor = async (req: Request, res: Response) => {
     const { id } = req.params; // zoneId (ou "none" pour détacher)
     const { sensorId } = req.body;
     if (!sensorId) {
-      throw new BadRequestException("sensorId is required", "zone.sensor.required");
+      throw new BadRequestException(
+        "sensorId is required",
+        "zone.sensor.required"
+      );
     }
     const sensor = await Sensor.findByPk(sensorId);
     if (!sensor) {
@@ -262,10 +254,14 @@ const assignSensor = async (req: Request, res: Response) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handleError = (res: Response, error: any, action: string) => {
   if (error instanceof BadRequestException) {
-    return res.status(400).json({ error: error.message, code: error.codeError });
+    return res
+      .status(400)
+      .json({ error: error.message, code: error.codeError });
   }
   if (error instanceof NotFoundException) {
-    return res.status(404).json({ error: error.message, code: error.codeError });
+    return res
+      .status(404)
+      .json({ error: error.message, code: error.codeError });
   }
   console.error(`Error ${action} zone:`, error);
   return res.status(500).json({

@@ -1,10 +1,7 @@
 import { Sequelize } from "sequelize";
 import type { ZoneCreation, ZoneModel, ZoneStatic } from "#/zone";
 
-const defineZoneModel = (
-  sequelize: Sequelize,
-  DataTypes: any
-): ZoneStatic => {
+const defineZoneModel = (sequelize: Sequelize, DataTypes: any): ZoneStatic => {
   const Zone = <ZoneStatic>sequelize.define<ZoneModel, ZoneCreation>(
     "Zone",
     {
