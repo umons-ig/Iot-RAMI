@@ -92,6 +92,8 @@ class SocketService {
         }
       });
     });
+    // Surveillance « capteur muet » (§4.2).
+    this.startWatchdog();
   }
   public sendDataToRoom(topic: string, data: KafkaPayload) {
     this.io.to(topic).emit("new-data", data);
@@ -167,6 +169,18 @@ class SocketService {
   }
   // Map sensorTopic → sessionId pour tracker les sessions actives
   private activeSessions: Map<string, string> = new Map();
+  // Watchdog « capteur muet » (§4.2) : dernière réception de données par topic,
+  // topics déjà signalés silencieux (anti-spam), et la boucle de surveillance.
+  private lastDataAt: Map<string, number> = new Map();
+  private silentTopics: Set<string> = new Set();
+  private watchdogInterval: NodeJS.Timeout | undefined;
+  // Seuil de silence (ms) au-delà duquel un capteur en session est déclaré muet.
+  private readonly SILENCE_THRESHOLD_MS = Number(
+    process.env.SENSOR_SILENCE_THRESHOLD_MS ?? 15_000
+  );
+  private readonly WATCHDOG_INTERVAL_MS = Number(
+    process.env.SENSOR_WATCHDOG_INTERVAL_MS ?? 5_000
+  );
   // Guard against duplicate session creation for the same topic when two START messages arrive concurrently
   private sessionCreationInProgress: Set<string> = new Set();
   // Map measureType name → id
@@ -264,6 +278,9 @@ class SocketService {
         data.sensorTopic,
         (session.dataValues as { id: string }).id
       );
+      // Le watchdog ne doit pas déclarer muette une session qui vient de démarrer.
+      this.lastDataAt.set(data.sensorTopic, Date.now());
+      this.silentTopics.delete(data.sensorTopic);
       activeSessionsTotal.inc();
       console.log(
         `▶️ [Session] Créée pour ${baseTopic} — id: ${session.dataValues.id}`
@@ -288,6 +305,15 @@ class SocketService {
 
   private async handleSensorData(data: KafkaDataPayload): Promise<void> {
     const startTime = process.hrtime();
+    // Le capteur émet : on rafraîchit le watchdog et, s'il était muet, on
+    // notifie la reprise du signal (§4.2).
+    this.lastDataAt.set(data.sensorTopic, Date.now());
+    if (this.silentTopics.delete(data.sensorTopic)) {
+      this.io.to(data.sensorTopic).emit("sensor-recovered", {
+        sensorTopic: data.sensorTopic,
+        recoveredAt: new Date().toISOString(),
+      });
+    }
     await this.getMeasurementTypesMap();
     const sessionId = this.activeSessions.get(data.sensorTopic);
     if (!sessionId) {
@@ -474,8 +500,49 @@ class SocketService {
       { where: { id: sessionId } }
     );
     this.activeSessions.delete(data.sensorTopic);
+    this.lastDataAt.delete(data.sensorTopic);
+    this.silentTopics.delete(data.sensorTopic);
     activeSessionsTotal.dec();
     console.log(`⏹️ [Session] Clôturée pour ${data.sensorTopic}`);
+  }
+
+  /**
+   * Démarre la surveillance « capteur muet » (§4.2) : en monitoring
+   * physiologique, l'absence prolongée de signal (ECG) est une urgence. Pour
+   * chaque session active sans données depuis SILENCE_THRESHOLD_MS, on émet
+   * `sensor-silent` (une fois) vers la room du topic.
+   */
+  public startWatchdog(): void {
+    if (this.watchdogInterval) return;
+    this.watchdogInterval = setInterval(
+      () => this.checkSilentSensors(),
+      this.WATCHDOG_INTERVAL_MS
+    );
+  }
+
+  public stopWatchdog(): void {
+    if (this.watchdogInterval) {
+      clearInterval(this.watchdogInterval);
+      this.watchdogInterval = undefined;
+    }
+  }
+
+  // Exposé pour les tests : un passage de surveillance.
+  public checkSilentSensors(now: number = Date.now()): void {
+    for (const [topic] of this.activeSessions) {
+      if (this.silentTopics.has(topic)) continue;
+      const last = this.lastDataAt.get(topic) ?? 0;
+      if (now - last > this.SILENCE_THRESHOLD_MS) {
+        this.silentTopics.add(topic);
+        const silentForMs = last === 0 ? null : now - last;
+        console.warn(`🔇 [Watchdog] Capteur muet: ${topic}`);
+        this.io.to(topic).emit("sensor-silent", {
+          sensorTopic: topic,
+          silentForMs,
+          detectedAt: new Date(now).toISOString(),
+        });
+      }
+    }
   }
 
   public emitSensorStatus(sensorName: string, status: string) {
@@ -483,6 +550,7 @@ class SocketService {
   }
 
   public async close(): Promise<void> {
+    this.stopWatchdog();
     const now = new Date();
     for (const [, sessionId] of this.activeSessions) {
       await Session.update({ endedAt: now }, { where: { id: sessionId } });
