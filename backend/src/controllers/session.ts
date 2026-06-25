@@ -297,9 +297,9 @@ const exportSessionAsCsv = async (req: Request, res: Response) => {
       `time,value,type`,
       ...sensorData.map(
         (row: any) =>
-          `${new Date(row.time).toISOString()},${row.value},${
-            row.MeasurementType.name
-          }`
+          `${new Date(row.time).toISOString()},${sanitizeCsvField(
+            String(row.value)
+          )},${sanitizeCsvField(row.MeasurementType.name)}`
       ),
     ];
     res.setHeader("Content-Type", "text/csv");

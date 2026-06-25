@@ -27,7 +27,9 @@ type APISensorDataErrors =
 type APISessionErrors =
   | "session.is.already.in.progress"
   | "session.is.already.closed"
-  | "session.not.found";
+  | "session.not.found"
+  | "session.access.forbidden"
+  | "sensor.access.forbidden";
 
 type APIUserSensorErrors =
   | "userSensor.user.id.required"
@@ -98,6 +100,7 @@ type APIUserErrors =
   | "user.body.invalid"
   | "user.body.empty"
   | "user.not.found"
+  | "user.sessions.forbidden"
   | "user.id.empty"
   | "user.name.empty"
   | "user.id.not.uuid"
