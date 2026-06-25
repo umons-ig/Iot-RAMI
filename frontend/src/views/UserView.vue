@@ -1,5 +1,17 @@
 <template>
 	<div class="user-view">
+		<div class="view-header">
+			<div class="view-header-left">
+				<div class="view-breadcrumb">
+					<span>RAMI</span>
+					<span class="breadcrumb-sep">/</span>
+					<span class="breadcrumb-current">PROFIL</span>
+				</div>
+				<h1 class="view-title">MON PROFIL</h1>
+				<span class="view-sub">COMPTE & DEMANDES D'ACCÈS</span>
+			</div>
+		</div>
+
 		<!-- Profile card -->
 		<div class="profile-card">
 			<div class="profile-avatar">

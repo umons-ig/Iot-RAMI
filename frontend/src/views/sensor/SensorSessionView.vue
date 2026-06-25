@@ -194,7 +194,7 @@
 		gap: 6px;
 		padding: 5px 12px;
 		background: var(--color-success-dim);
-		border: 1px solid rgba(57, 255, 20, 0.3);
+		border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
 		color: var(--color-success);
 		font-family: var(--font-mono);
 		font-size: 0.65rem;

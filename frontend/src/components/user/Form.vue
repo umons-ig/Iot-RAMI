@@ -161,7 +161,7 @@
 		border: 1px solid var(--color-border-bright);
 		padding: 2px;
 		position: relative;
-		box-shadow: 0 0 60px var(--color-primary-glow), 0 0 120px rgba(255, 159, 10, 0.04);
+		box-shadow: 0 0 60px var(--color-primary-glow), 0 0 120px color-mix(in srgb, var(--color-primary) 4%, transparent);
 	}
 
 	/* Coins décoratifs */
@@ -206,7 +206,7 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		line-height: 1;
-		text-shadow: 0 0 30px var(--color-primary-glow), 0 0 60px rgba(255, 159, 10, 0.15);
+		text-shadow: 0 0 30px var(--color-primary-glow), 0 0 60px color-mix(in srgb, var(--color-primary) 15%, transparent);
 		margin-bottom: 4px;
 		animation: title-fade-in 0.4s ease-out both;
 	}

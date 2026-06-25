@@ -59,7 +59,7 @@
 		border: 1px solid var(--color-border);
 		padding: 0.75rem 1rem;
 		background-color: var(--color-surface-secondary);
-		border-radius: 8px;
+		border-radius: 0;
 		cursor: pointer;
 		transition: border-color 0.2s;
 	}
@@ -70,7 +70,7 @@
 
 	.user-card--selected {
 		border-color: var(--color-primary);
-		background-color: rgba(14, 165, 233, 0.08);
+		background-color: var(--color-primary-dim);
 	}
 
 	.user-avatar {
@@ -124,8 +124,8 @@
 		font-size: 0.72rem;
 		font-weight: 600;
 		padding: 2px 8px;
-		border-radius: 999px;
-		background: rgba(14, 165, 233, 0.15);
+		border-radius: 0;
+		background: var(--color-primary-dim);
 		color: var(--color-primary);
 		text-transform: capitalize;
 	}
