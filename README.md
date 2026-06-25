@@ -31,6 +31,14 @@ ESP32 / Simulateur Python
 
 ---
 
+## Organisation du parc & contrôle d'accès
+
+- **Zones hiérarchiques** (vue `/zones`) : arbre récursif *entreprise › bâtiment › étage › pièce*. Chaque capteur est rattaché à une zone-feuille.
+- **Équipes** (vue `/teams`) : groupes d'utilisateurs.
+- **Accès en cascade** : on accorde l'accès à une zone à un utilisateur **ou** une équipe → tous voient, en cascade, les capteurs de tout le sous-arbre. L'accès effectif = accès individuels (par capteur) ∪ accès par zones (perso + équipes). Détails dans [`docs/API.md`](./docs/API.md).
+
+---
+
 ## Structure du dépôt
 
 | Dossier | Description | Port |

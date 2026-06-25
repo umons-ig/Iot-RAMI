@@ -237,6 +237,91 @@ const components = {
           message: { type: "string" },
         },
       },
+      Zone: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          type: {
+            type: "string",
+            nullable: true,
+            description:
+              "Libelle libre du niveau (company, building, floor, room…)",
+          },
+          parentId: {
+            type: "string",
+            format: "uuid",
+            nullable: true,
+            description: "Zone parente (null = racine)",
+          },
+        },
+      },
+      ZoneCreate: {
+        type: "object",
+        required: ["name"],
+        properties: {
+          name: { type: "string" },
+          type: { type: "string", nullable: true },
+          parentId: { type: "string", format: "uuid", nullable: true },
+        },
+      },
+      ZoneTreeNode: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          type: { type: "string", nullable: true },
+          parentId: { type: "string", format: "uuid", nullable: true },
+          sensorCount: {
+            type: "integer",
+            description: "Capteurs directs visibles dans la zone",
+          },
+          children: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ZoneTreeNode" },
+          },
+        },
+      },
+      ZoneAccess: {
+        type: "object",
+        description: "Users et equipes ayant un acces direct a la zone",
+        properties: {
+          users: {
+            type: "array",
+            items: { $ref: "#/components/schemas/User" },
+          },
+          teams: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Team" },
+          },
+        },
+      },
+      ZoneAccessTarget: {
+        type: "object",
+        description:
+          "Cible d'un grant d'acces : exactement un des deux champs.",
+        properties: {
+          userId: { type: "string", format: "uuid" },
+          teamId: { type: "string", format: "uuid" },
+        },
+      },
+      Team: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          members: {
+            type: "array",
+            items: { $ref: "#/components/schemas/User" },
+            description: "Present sur GET /teams/:id",
+          },
+          zones: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Zone" },
+            description: "Zones accordees a l'equipe (GET /teams/:id)",
+          },
+        },
+      },
       Error: {
         type: "object",
         properties: {

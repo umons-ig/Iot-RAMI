@@ -14,6 +14,15 @@ const tags = {
       description:
         "Alert threshold management — min/max per sensor and measurement type",
     },
+    {
+      name: "Zone",
+      description:
+        "Hierarchical zones (tree) + sensor assignment and cascading zone access",
+    },
+    {
+      name: "Team",
+      description: "User teams — grouped, cascading zone access",
+    },
   ],
 };
 

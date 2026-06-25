@@ -5,6 +5,8 @@ import { userPaths } from "@docs/user";
 import { sessionPaths } from "@docs/session";
 import { authPaths } from "@docs/auth";
 import { thresholdPaths } from "@docs/threshold";
+import { zonePaths } from "@docs/zone";
+import { teamPaths } from "@docs/team";
 
 const paths = {
   paths: {
@@ -15,6 +17,8 @@ const paths = {
     ...sessionPaths,
     ...authPaths,
     ...thresholdPaths,
+    ...zonePaths,
+    ...teamPaths,
   },
 };
 

@@ -120,13 +120,18 @@ npm run docker:init-db   # Migrations + seeders
 
 | Méthode | Route | Description |
 |---------|-------|-------------|
-| POST | `/auth/login` | Connexion utilisateur |
+| POST | `/users/login` | Connexion utilisateur (JWT + cookie refresh) |
 | GET/POST | `/sensors` | Lister / créer un capteur |
 | GET | `/sensors/discovered` | Capteurs détectés automatiquement via MQTT |
 | GET | `/sensors/connexion/online/:name` | Statut en ligne d'un capteur |
 | GET | `/sessions` | Sessions de mesure |
 | GET | `/sessions/:id/export/csv` | Export CSV d'une session |
-| GET | `/measurements` | Types de mesures disponibles |
+| GET | `/measurements` | Mesures |
+| GET | `/measurementTypes` | Types de mesures |
+| GET/POST | `/zones` | Zones hiérarchiques (arbre via `/zones/tree`) |
+| POST/DELETE | `/zones/:id/access` | Accorder/retirer l'accès à une zone (user ou team, cascade) |
+| GET/POST | `/teams` | Équipes d'utilisateurs (+ `/teams/:id/members`) |
+| GET/POST | `/thresholds` | Seuils d'alerte par capteur |
 
 Documentation complète : http://localhost:3000/api/v1/docs
 

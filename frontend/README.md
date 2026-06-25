@@ -76,9 +76,13 @@ Les composables sont la couche métier principale :
 |------------|------|
 | `useUser` | Authentification, gestion des rôles (admin/operator) |
 | `useSession` | Sessions de mesure, connexion WebSocket, mise à jour du graphique |
-| `useSensor` | Liste des capteurs, statut en ligne, auto-discover |
+| `useSensor` | Liste des capteurs, statut en ligne, auto-discover, recherche |
 | `useMeasurement` | Types de mesures disponibles |
 | `useChart` | Configuration Chart.js |
+| `useZone` | Arborescence des zones (CRUD, assignation capteurs, accès par zone) |
+| `useTeam` | Équipes : CRUD + gestion des membres |
+| `useThreshold` | Seuils d'alerte min/max par capteur |
+| `useTheme` | Thème (ambre/vert/clair) + effet CRT |
 | `useAxios` | Instance Axios configurée avec le token JWT |
 
 ### Flux de données temps réel

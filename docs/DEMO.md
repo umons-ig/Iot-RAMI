@@ -123,6 +123,15 @@ Le simulateur ou l'ESP32 se connecte au Mosquitto du fog. Le fog transmet vers K
 
 ---
 
+## Zones et equipes (controle d'acces)
+
+1. Vue **Zones** (`/zones`) : creer une zone racine « Batiment A », puis une sous-zone « Etage 2 » (bouton `+` sur la zone). L'arbre se construit a gauche.
+2. Selectionner une zone → le panneau de droite montre ses **stats** (capteurs ici / sous-arbre / sous-zones) et permet de **rattacher un capteur**.
+3. Vue **Equipes** (`/teams`, admin) : creer « Equipe Labo », lui ajouter des membres.
+4. Retour dans **Zones** → selectionner « Batiment A » → panneau **ACCES** → accorder l'acces a l'equipe « Equipe Labo ». Tous ses membres voient desormais, **en cascade**, les capteurs de tout le batiment.
+
+---
+
 ## Points a montrer lors de la demo
 
 | Fonctionnalite                  | Ou le voir                                       |
@@ -133,5 +142,9 @@ Le simulateur ou l'ESP32 se connecte au Mosquitto du fog. Le fog transmet vers K
 | Graphique multi-mesures         | Vue session → courbes temperature + humidite     |
 | Auto-decouverte de topics       | `GET /api/v1/sensors/discovered`                 |
 | Export CSV                      | Bouton dans la carte session                     |
+| Zones hierarchiques + drill-down | Vue `/zones` (arbre, stats, fil d'Ariane)       |
+| Equipes + acces en cascade      | Vue `/teams` + panneau ACCES d'une zone          |
+| Recherche de capteurs           | Barre de recherche dans `/sensors`               |
+| Command palette                 | `⌘K` (navigation + theme + CRT)                  |
 | Swagger API                     | `http://localhost:3000/api/v1/docs`              |
 | Pipeline CI/CD                  | GitHub Actions → GHCR → Watchtower               |
