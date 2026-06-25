@@ -6,6 +6,13 @@
 > complète le backlog priorisé de [`IMPROVEMENTS.md`](./IMPROVEMENTS.md) et la
 > [`ROADMAP.md`](../ROADMAP.md).
 
+> **⚠️ Mise à jour (instantané daté) — plusieurs items listés ci-dessous sont RÉSOLUS depuis.**
+> - **#7 (perte de données fog)** et **#8 (shutdown gracieux fog)** : résolus par l'**outbox store-and-forward** Postgres du fog (write-ahead avant ACK, drain au reboot, shutdown propre). Voir [`FOG_PERSISTENCE.md`](./FOG_PERSISTENCE.md).
+> - **Débit** : la limite « ~2 400 pts/s » était **pré-correctifs**. Après `await callback` + `ignoreDuplicates`, le plancher mesuré est **~10 000 pts/s** (bottleneck = flush WAL TimescaleDB). Voir [`LOAD_TEST.md`](./LOAD_TEST.md).
+> - Robustesse temps réel backend (poison pill Kafka, reconnexion consumer, DLQ bornée, validation timestamp) et IDOR sessions : traités, voir [`PLAN_AMELIORATIONS.md`](./PLAN_AMELIORATIONS.md).
+>
+> Le reste du document est conservé comme **archive de l'audit du 09/06/2026**.
+
 ## Verdict général
 
 Projet **solide et mature pour un stage** : architecture en couches propre, pipeline temps
