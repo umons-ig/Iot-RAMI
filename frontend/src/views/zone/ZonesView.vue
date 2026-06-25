@@ -59,6 +59,46 @@
 		return allSensors.value.filter(s => s.zoneId !== currentId)
 	})
 
+	// ── Stats & navigation (drill-down) ──────────────────────
+	// Chemin racine → zone sélectionnée (fil d'Ariane), calculé sur l'arbre.
+	function findPath(nodes: ZoneTreeNode[], id: string, acc: ZoneTreeNode[]): ZoneTreeNode[] | null {
+		for (const n of nodes) {
+			const next = [...acc, n]
+			if (n.id === id) return next
+			const found = findPath(n.children, id, next)
+			if (found) return found
+		}
+		return null
+	}
+	const breadcrumb = computed<ZoneTreeNode[]>(() => {
+		if (!selected.value) return []
+		return findPath(tree.value, selected.value.id, []) ?? [selected.value]
+	})
+
+	// Sous-zones directes de la zone sélectionnée (cartes cliquables = drill-down).
+	const childZones = computed<ZoneTreeNode[]>(() => selected.value?.children ?? [])
+
+	// Stats du sous-arbre : capteurs (cumul) + nombre de sous-zones (récursif).
+	function subtreeStats(node: ZoneTreeNode): { sensors: number; zones: number } {
+		let sensors = node.sensorCount
+		let zones = node.children.length
+		for (const c of node.children) {
+			const s = subtreeStats(c)
+			sensors += s.sensors
+			zones += s.zones
+		}
+		return { sensors, zones }
+	}
+	const stats = computed(() => {
+		if (!selected.value) return { directSensors: 0, totalSensors: 0, subZones: 0 }
+		const sub = subtreeStats(selected.value)
+		return {
+			directSensors: selected.value.sensorCount,
+			totalSensors: sub.sensors,
+			subZones: sub.zones,
+		}
+	})
+
 	// ── Actions modale ───────────────────────────────────────
 	function openCreate(parentId: string | null) {
 		modal.value = { mode: "create", parentId }
@@ -191,6 +231,25 @@
 				</div>
 
 				<template v-else>
+					<!-- Fil d'Ariane (drill-up) -->
+					<nav
+						class="zbreadcrumb"
+						aria-label="Chemin de la zone">
+						<button
+							v-for="(crumb, i) in breadcrumb"
+							:key="crumb.id"
+							class="zcrumb"
+							:class="{ current: i === breadcrumb.length - 1 }"
+							@click="selectZone(crumb)">
+							{{ crumb.name
+							}}<span
+								v-if="i < breadcrumb.length - 1"
+								class="zcrumb-sep"
+								>›</span
+							>
+						</button>
+					</nav>
+
 					<div class="detail-head">
 						<div>
 							<h2 class="detail-title">{{ selected.name }}</h2>
@@ -200,7 +259,44 @@
 								{{ selected.type }}
 							</span>
 						</div>
-						<span class="detail-count">{{ zoneSensors.length }} CAPTEUR(S)</span>
+					</div>
+
+					<!-- Stats de la zone -->
+					<div class="zstats">
+						<div class="zstat">
+							<span class="zstat-val">{{ String(stats.directSensors).padStart(2, "0") }}</span>
+							<span class="zstat-lbl">CAPTEURS ICI</span>
+						</div>
+						<div class="zstat">
+							<span class="zstat-val">{{ String(stats.totalSensors).padStart(2, "0") }}</span>
+							<span class="zstat-lbl">CAPTEURS (SOUS-ARBRE)</span>
+						</div>
+						<div class="zstat">
+							<span class="zstat-val">{{ String(stats.subZones).padStart(2, "0") }}</span>
+							<span class="zstat-lbl">SOUS-ZONES</span>
+						</div>
+					</div>
+
+					<!-- Sous-zones cliquables (drill-down) -->
+					<div
+						v-if="childZones.length"
+						class="subzones">
+						<p class="subzones-head">SOUS-ZONES — CLIQUER POUR DESCENDRE</p>
+						<div class="subzone-grid">
+							<button
+								v-for="child in childZones"
+								:key="child.id"
+								class="subzone-card"
+								@click="selectZone(child)">
+								<span class="subzone-name">{{ child.name }}</span>
+								<span
+									v-if="child.type"
+									class="subzone-type"
+									>{{ child.type }}</span
+								>
+								<span class="subzone-meta">↳ {{ subtreeStats(child).sensors }} capt. · {{ child.children.length }} z.</span>
+							</button>
+						</div>
 					</div>
 
 					<!-- Affectation -->
@@ -481,6 +577,126 @@
 		font-size: 0.6rem;
 		color: var(--color-primary);
 		letter-spacing: 0.08em;
+	}
+
+	/* Fil d'Ariane */
+	.zbreadcrumb {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		padding: 0.7rem 1rem 0;
+		gap: 2px;
+	}
+	.zcrumb {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+		padding: 2px 4px;
+		transition: color var(--dur-fast);
+	}
+	.zcrumb:hover {
+		color: var(--color-primary);
+	}
+	.zcrumb.current {
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.zcrumb-sep {
+		margin-left: 6px;
+		opacity: 0.4;
+	}
+
+	/* Stats */
+	.zstats {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 1px;
+		background: var(--color-border);
+		border-top: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+		margin-top: 0.5rem;
+	}
+	.zstat {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+		padding: 0.9rem 0.5rem;
+		background: var(--color-surface);
+	}
+	.zstat-val {
+		font-family: var(--font-display);
+		font-size: 2rem;
+		font-weight: 900;
+		line-height: 1;
+		color: var(--color-primary);
+		text-shadow: 0 0 18px var(--color-primary-glow);
+	}
+	.zstat-lbl {
+		font-family: var(--font-mono);
+		font-size: 0.5rem;
+		letter-spacing: 0.1em;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		text-align: center;
+	}
+
+	/* Sous-zones (drill-down) */
+	.subzones {
+		padding: 1rem 1rem 0;
+	}
+	.subzones-head {
+		font-family: var(--font-mono);
+		font-size: 0.52rem;
+		letter-spacing: 0.14em;
+		color: var(--color-text-muted);
+		text-transform: uppercase;
+		margin-bottom: 0.6rem;
+	}
+	.subzone-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		gap: 8px;
+	}
+	.subzone-card {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		padding: 0.7rem;
+		background: var(--color-surface-secondary);
+		border: 1px solid var(--color-border-bright);
+		border-left: 2px solid var(--color-primary);
+		cursor: pointer;
+		text-align: left;
+		transition: box-shadow var(--dur-fast), transform var(--dur-fast);
+	}
+	.subzone-card:hover {
+		box-shadow: inset 0 0 20px var(--color-primary-dim), 0 0 12px var(--color-primary-glow);
+		transform: translateX(2px);
+	}
+	.subzone-name {
+		font-family: var(--font-mono);
+		font-size: 0.74rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.subzone-type {
+		font-family: var(--font-mono);
+		font-size: 0.5rem;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--color-text-muted);
+	}
+	.subzone-meta {
+		font-family: var(--font-mono);
+		font-size: 0.56rem;
+		color: var(--color-text-muted);
+		margin-top: 2px;
 	}
 
 	.assign-row {

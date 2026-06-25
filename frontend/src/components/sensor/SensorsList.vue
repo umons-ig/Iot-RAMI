@@ -16,6 +16,28 @@
 			</div>
 		</div>
 
+		<!-- Recherche (mode standalone) -->
+		<div
+			v-if="standalone"
+			class="search-bar">
+			<span class="search-icon">⌕</span>
+			<input
+				v-model="search"
+				class="search-input"
+				type="text"
+				placeholder="RECHERCHER UN CAPTEUR…"
+				aria-label="Rechercher un capteur"
+				autocomplete="off"
+				@input="onSearch" />
+			<button
+				v-if="search"
+				class="search-clear"
+				aria-label="Effacer la recherche"
+				@click="clearSearch">
+				✕
+			</button>
+		</div>
+
 		<!-- Corps de la liste -->
 		<div
 			class="sensors-list"
@@ -82,7 +104,7 @@
 </template>
 
 <script lang="ts">
-	import { defineComponent, onMounted, onUnmounted, computed, reactive } from "vue"
+	import { defineComponent, onMounted, onUnmounted, computed, reactive, ref } from "vue"
 	import SensorCard from "@/components/sensor/SensorCard.vue"
 	import { useSensor, SensorState } from "@/composables/useSensor.composable"
 	import { useSocket } from "@/composables/useSocket.composable"
@@ -123,6 +145,22 @@
 				}
 			}
 
+			// ── Recherche de capteurs (serveur, via ?name=) ──
+			const search = ref("")
+			let searchTimer: ReturnType<typeof setTimeout> | undefined
+			const onSearch = () => {
+				if (searchTimer) clearTimeout(searchTimer)
+				searchTimer = setTimeout(async () => {
+					await fetchSensors(1, PAGE_LIMIT, search.value)
+					await loadStatuses()
+				}, 300)
+			}
+			const clearSearch = async () => {
+				search.value = ""
+				await fetchSensors(1, PAGE_LIMIT)
+				await loadStatuses()
+			}
+
 			onMounted(async () => {
 				await fetchSensors(1, PAGE_LIMIT)
 				await loadStatuses()
@@ -134,7 +172,7 @@
 
 			const goToPage = async (page: number) => {
 				if (page < 1 || page > totalPages.value) return
-				await fetchSensors(page, PAGE_LIMIT)
+				await fetchSensors(page, PAGE_LIMIT, search.value)
 				await loadStatuses()
 				// Scroll vers le haut de la liste
 				const el = document.querySelector(".sensors-list-view--standalone")
@@ -172,6 +210,9 @@
 				pageNumbers,
 				goToPage,
 				sensorStatuses,
+				search,
+				onSearch,
+				clearSearch,
 				props,
 			}
 		},
@@ -245,6 +286,56 @@
 		padding: 2px 6px;
 		border: 1px solid var(--color-border-bright);
 		opacity: 0.6;
+	}
+
+	/* ── Recherche ── */
+	.search-bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 1rem 0.75rem;
+		padding: 0.45rem 0.7rem;
+		background: var(--color-background);
+		border: 1px solid var(--color-border-bright);
+		transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+	}
+	.search-bar:focus-within {
+		border-color: var(--color-primary);
+		box-shadow: inset 0 0 14px var(--color-primary-dim);
+	}
+	.search-icon {
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		flex-shrink: 0;
+	}
+	.search-input {
+		flex: 1;
+		background: none;
+		border: none;
+		outline: none;
+		color: var(--color-text);
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		caret-color: var(--color-primary);
+	}
+	.search-input::placeholder {
+		color: var(--color-text-muted);
+		opacity: 0.7;
+	}
+	.search-clear {
+		background: none;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		font-size: 0.65rem;
+		padding: 0;
+		flex-shrink: 0;
+		transition: color var(--dur-fast);
+	}
+	.search-clear:hover {
+		color: var(--color-danger);
 	}
 
 	/* ── Liste ── */

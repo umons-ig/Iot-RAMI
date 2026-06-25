@@ -2,15 +2,22 @@
 	import { defineComponent, onMounted, ref } from "vue"
 	import { useRouter } from "vue-router"
 	import { useSensor } from "@/composables/useSensor.composable"
+	import { useZone } from "@/composables/useZone.composable"
 	import { useAxios } from "@/composables/useAxios.composable"
 	import { UserFields } from "#/user"
+	import type { ZoneTreeNode } from "#/zone"
 	import SensorCard from "@/components/sensor/SensorCard.vue"
+
+	function subtreeSensors(node: ZoneTreeNode): number {
+		return node.children.reduce((acc, c) => acc + subtreeSensors(c), node.sensorCount)
+	}
 
 	export default defineComponent({
 		name: "DashboardView",
 		components: { SensorCard },
 		setup() {
 			const { fetchSensors, sensors, totalSensors } = useSensor(undefined)
+			const { tree: zoneTree, fetchTree } = useZone()
 			const { axios } = useAxios()
 			const router = useRouter()
 
@@ -22,7 +29,7 @@
 
 			onMounted(async () => {
 				try {
-					await fetchSensors()
+					await Promise.all([fetchSensors(), fetchTree().catch(() => undefined)])
 					const [sessionsRes, activeRes] = await Promise.all([axios.get(`users/${userId}/sessions?page=1&limit=1`), axios.get("sessions/active")])
 					const payload = sessionsRes.data
 					totalSessions.value = payload.total ?? (Array.isArray(payload) ? payload.length : 0)
@@ -39,9 +46,12 @@
 				totalSensors,
 				totalSessions,
 				activeSessions,
+				zoneTree,
+				subtreeSensors,
 				firstName,
 				isLoading,
 				goToSensors: () => router.push({ name: "sensors" }),
+				goToZones: () => router.push({ name: "zones" }),
 			}
 		},
 	})
@@ -119,6 +129,27 @@
 				<span class="stat-label">EN COURS</span>
 			</div>
 		</div>
+
+		<!-- Zones — navigation rapide -->
+		<section
+			v-if="!isLoading && zoneTree.length > 0"
+			class="section">
+			<div class="section-header">
+				<h2>ACCÈS RAPIDE PAR ZONES</h2>
+				<span class="section-hint">CLIQUER POUR EXPLORER LE PARC</span>
+			</div>
+			<div class="zones-grid">
+				<button
+					v-for="z in zoneTree"
+					:key="z.id"
+					class="zone-tile"
+					@click="goToZones">
+					<span class="zone-tile-glyph">▦</span>
+					<span class="zone-tile-name">{{ z.name }}</span>
+					<span class="zone-tile-meta">{{ subtreeSensors(z) }} capt. · {{ z.children.length }} sous-zones</span>
+				</button>
+			</div>
+		</section>
 
 		<!-- Capteurs — navigation rapide -->
 		<section class="section">
@@ -416,6 +447,51 @@
 
 	.sensors-grid > *:nth-child(2n) {
 		border-right: none;
+	}
+
+	/* Grille zones — navigation rapide */
+	.zones-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+		gap: 0;
+		border: 1px solid var(--color-border);
+	}
+	.zone-tile {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 1.1rem 1.2rem;
+		background: var(--color-surface);
+		border-right: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+		border-left: 2px solid var(--color-primary);
+		cursor: pointer;
+		text-align: left;
+		transition: background-color var(--dur-base), box-shadow var(--dur-base);
+	}
+	.zone-tile:hover {
+		background: var(--color-surface-secondary);
+		box-shadow: inset 0 0 36px var(--color-primary-dim);
+	}
+	.zone-tile-glyph {
+		color: var(--color-primary);
+		font-size: 1.1rem;
+		text-shadow: 0 0 12px var(--color-primary-glow);
+	}
+	.zone-tile-name {
+		font-family: var(--font-display);
+		font-size: 1.3rem;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-text);
+		line-height: 1.05;
+	}
+	.zone-tile-meta {
+		font-family: var(--font-mono);
+		font-size: 0.58rem;
+		color: var(--color-text-muted);
+		letter-spacing: 0.06em;
 	}
 
 	/* Skeleton loaders */

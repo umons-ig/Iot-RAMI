@@ -76,8 +76,10 @@ export const useSensor = (sensorName: string | undefined) => {
 
 	// *************************** [METHOD]  SENSOR LIST AND SENSOR SELECTION
 
-	const getAllSensors = async (page: number = 1, limit: number = 20) => {
-		const result = (await axios.get(SensorAPIEndpoint.GET_ALL_SENSOR, { params: { page, limit } })) as {
+	const getAllSensors = async (page: number = 1, limit: number = 20, name?: string) => {
+		const params: Record<string, string | number> = { page, limit }
+		if (name && name.trim() !== "") params.name = name.trim()
+		const result = (await axios.get(SensorAPIEndpoint.GET_ALL_SENSOR, { params })) as {
 			data: { data: Sensor[]; total: number; totalPages: number; page: number } | Sensor[]
 		}
 		const payload = result.data
@@ -92,9 +94,9 @@ export const useSensor = (sensorName: string | undefined) => {
 		return data
 	}
 
-	const fetchSensors = async (page: number = 1, limit: number = 20) => {
+	const fetchSensors = async (page: number = 1, limit: number = 20, name?: string) => {
 		try {
-			const result = await getAllSensors(page, limit)
+			const result = await getAllSensors(page, limit, name)
 			sensors.value = result.data
 			currentPage.value = result.page
 			totalPages.value = result.totalPages
