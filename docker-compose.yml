@@ -142,9 +142,22 @@
         - "127.0.0.1:9090:9090"
       volumes:
         - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        - ./monitoring/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
       depends_on:
         node-backend:
           condition: service_healthy
+      networks:
+        - rami-network
+
+    # Alertmanager (§3.2) : reçoit les alertes Prometheus et les route.
+    alertmanager:
+      image: prom/alertmanager:v0.27.0
+      container_name: iot-rami-alertmanager
+      restart: always
+      ports:
+        - "127.0.0.1:9093:9093"
+      volumes:
+        - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       networks:
         - rami-network
 
@@ -156,6 +169,9 @@
         - "3001:3000"
       volumes:
         - grafana-data:/var/lib/grafana
+        # Provisioning as-code (§3.3) : datasource + dashboards automatiques.
+        - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+        - ./monitoring/rami-dashboard.json:/var/lib/grafana/dashboards/rami-dashboard.json:ro
       environment:
         GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?Definir GF_SECURITY_ADMIN_PASSWORD dans .env}
       depends_on:

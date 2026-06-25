@@ -1,0 +1,13 @@
+# Provisioning automatique des dashboards (PLAN_AMELIORATIONS §3.3).
+# Charge tous les JSON présents dans /var/lib/grafana/dashboards.
+apiVersion: 1
+
+providers:
+  - name: "rami"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
