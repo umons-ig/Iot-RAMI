@@ -261,12 +261,15 @@ describe("SocketService", () => {
       const kafkaMock = {
         registerTopic: jest.fn(),
         startConsuming: jest.fn().mockResolvedValue(undefined),
+        onCrash: jest.fn(),
       };
       (KafkaService.getInstance as jest.Mock).mockResolvedValue(kafkaMock);
 
       await service.startKafkaConsumer();
 
       expect((service as any).kafkaRetryCount).toBe(0);
+      // Le handler de reconnexion sur crash est enregistré (cf. §1.2).
+      expect(kafkaMock.onCrash).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -345,6 +348,29 @@ describe("SocketService", () => {
       ).toHaveBeenCalledWith("unknown-type");
       // Aucune ligne à insérer → bulkCreate non appelé
       expect(db.sensordata.bulkCreate).not.toHaveBeenCalled();
+    });
+
+    it("ignore une entrée dont le timestamp est hors plage (capteur en ms au lieu de µs)", async () => {
+      // Un capteur mal configuré émettant en millisecondes : /1000 -> ~1970.
+      const payloadBadTs = {
+        ...dataPayload,
+        measures: [
+          {
+            timestamp: Date.now(), // ms au lieu de µs -> date en 1970 après /1000
+            measures: [{ measureType: "temperature", value: 25.5 }],
+          },
+        ],
+      };
+
+      const warnSpy = jest
+        .spyOn(console, "warn")
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        .mockImplementation(() => {});
+
+      await (service as any).handleSensorData(payloadBadTs);
+
+      expect(db.sensordata.bulkCreate).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
 
     it("log un warning et retourne sans bulkCreate si pas de session active", async () => {

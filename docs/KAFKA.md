@@ -56,14 +56,14 @@ Le backend stocke les donnees en base (TimescaleDB) et les envoie aux clients We
   "sensorTopic": "esp32-dht22-topic/sensor",
   "measures": [
     {
-      "timestamp": 1735000001000,
+      "timestamp": 1735000001000000,
       "measures": [
         { "measureType": "temperature", "value": 23.5 },
         { "measureType": "humidity",    "value": 61.2 }
       ]
     },
     {
-      "timestamp": 1735000002000,
+      "timestamp": 1735000002000000,
       "measures": [
         { "measureType": "temperature", "value": 23.7 },
         { "measureType": "humidity",    "value": 60.8 }
@@ -73,12 +73,19 @@ Le backend stocke les donnees en base (TimescaleDB) et les envoie aux clients We
 }
 ```
 
+> ⚠️ **Unité du timestamp des mesures** : `measures[].timestamp` est en
+> **microsecondes** (le simulateur/ESP32 publie `time × 1e6`), contrairement aux
+> messages `start`/`stop` dont le `timestamp` est en **millisecondes** (`Date.now()`
+> côté fog). Le backend divise par 1000 et **rejette** les valeurs hors plage
+> (`< 2020-01-01` ou `> maintenant + 1 j`) pour se protéger d'un capteur mal
+> configuré émettant en ms. Cf. PLAN_AMELIORATIONS §1.4.
+
 | Champ                       | Type       | Description                                      |
 |-----------------------------|------------|--------------------------------------------------|
 | `type`                      | `string`   | Toujours `"data"`                                |
 | `sensorTopic`               | `string`   | Topic MQTT complet du capteur                    |
 | `measures`                  | `array`    | Tableau d'entrees de mesure (batch)              |
-| `measures[].timestamp`      | `number`   | Epoch Unix en millisecondes                      |
+| `measures[].timestamp`      | `number`   | Epoch Unix en **microsecondes** (`time × 1e6`)   |
 | `measures[].measures`       | `array`    | Tableau de paires type/valeur                    |
 | `measures[].measures[].measureType` | `string` | Nom du type de mesure (`ecg`, `temperature`, `humidity`) |
 | `measures[].measures[].value`       | `number` | Valeur numerique de la mesure               |

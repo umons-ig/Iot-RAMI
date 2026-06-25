@@ -97,6 +97,7 @@ class SocketService {
     this.io.to(topic).emit("new-data", data);
   }
   private kafkaRetryCount = 0;
+  private kafkaRestarting = false;
   private static readonly KAFKA_MAX_RETRIES = 10;
   private static readonly KAFKA_RETRY_BASE_MS = 1_000;
   private static readonly KAFKA_MAX_RETRY_DELAY_MS = 30_000;
@@ -120,6 +121,20 @@ class SocketService {
           console.error("❌ [Kafka] Erreur traitement message:", error);
           dlq.push(data);
         }
+      });
+      // Reconnexion auto sur crash non récupérable : on recrée un consumer neuf
+      // et on relance (avec le backoff de cette même méthode). Cf. §1.2.
+      kafkaService.onCrash?.(() => {
+        if (this.kafkaRestarting) return;
+        this.kafkaRestarting = true;
+        console.error(
+          "❌ [Kafka] Crash non récupérable — redémarrage du consumer"
+        );
+        KafkaService.reset();
+        this.kafkaRetryCount = 0;
+        void this.startKafkaConsumer().finally(() => {
+          this.kafkaRestarting = false;
+        });
       });
       await kafkaService.startConsuming();
       this.kafkaRetryCount = 0;
@@ -248,6 +263,19 @@ class SocketService {
     }
   }
 
+  // Les mesures capteur sont horodatées en MICROSECONDES (simulateur/ESP32 :
+  // time*1e6). On normalise en ms et on rejette les valeurs aberrantes (capteur
+  // mal configuré émettant en ms -> dates en 1970, ou horloge dans le futur).
+  // Cf. PLAN_AMELIORATIONS §1.4 et docs/KAFKA.md.
+  private static readonly MIN_VALID_MS = Date.UTC(2020, 0, 1);
+  private normalizeTimestampMicros(micros: number): number | null {
+    if (typeof micros !== "number" || !Number.isFinite(micros)) return null;
+    const ms = Math.floor(micros / 1000);
+    const maxValidMs = Date.now() + 24 * 60 * 60 * 1000; // tolérance +1 jour
+    if (ms < SocketService.MIN_VALID_MS || ms > maxValidMs) return null;
+    return ms;
+  }
+
   private async handleSensorData(data: KafkaDataPayload): Promise<void> {
     const startTime = process.hrtime();
     await this.getMeasurementTypesMap();
@@ -280,6 +308,13 @@ class SocketService {
     const alerts: AlertItem[] = [];
 
     for (const entry of data.measures) {
+      const timeMs = this.normalizeTimestampMicros(entry.timestamp);
+      if (timeMs === null) {
+        console.warn(
+          `⚠️ [SensorData] Timestamp hors plage ignoré: ${entry.timestamp} (topic ${data.sensorTopic})`
+        );
+        continue;
+      }
       for (const measure of entry.measures) {
         const idMeasurementType = this.measurementTypesMap.get(
           measure.measureType
@@ -292,7 +327,7 @@ class SocketService {
           continue;
         }
         rows.push({
-          time: new Date(Math.floor(entry.timestamp / 1000)),
+          time: new Date(timeMs),
           idSensor: sensor.id,
           idMeasurementType,
           value: measure.value,
