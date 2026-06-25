@@ -53,6 +53,40 @@
 
 		<!-- Footer -->
 		<div class="sidebar-footer">
+			<!-- Poste de commande -->
+			<button
+				class="cmd-btn"
+				@click="openPalette">
+				<span class="cmd-btn__label">COMMANDES</span>
+				<span class="cmd-btn__keys"><kbd>⌘</kbd><kbd>K</kbd></span>
+			</button>
+
+			<div class="deck">
+				<div
+					class="theme-swatches"
+					role="group"
+					aria-label="Choix du thème">
+					<button
+						v-for="t in themes"
+						:key="t.id"
+						class="swatch"
+						:class="{ active: theme === t.id }"
+						:style="{ background: t.swatch }"
+						:title="t.label"
+						:aria-label="`Thème ${t.label}`"
+						:aria-pressed="theme === t.id"
+						@click="setTheme(t.id)" />
+				</div>
+				<button
+					class="crt-toggle"
+					:class="{ on: crtEnabled }"
+					:aria-pressed="crtEnabled"
+					title="Effet CRT (scanlines)"
+					@click="toggleCrt">
+					CRT
+				</button>
+			</div>
+
 			<div class="footer-top">
 				<div class="system-status">
 					<span class="status-dot" />
@@ -106,6 +140,8 @@
 	import { io } from "socket.io-client"
 	import { useUser } from "@/composables/useUser.composable"
 	import { useAlert } from "@/composables/useAlert.composable"
+	import { useTheme } from "@/composables/useTheme.composable"
+	import { usePalette } from "@/composables/usePalette.composable"
 
 	const { cleanUserLocalStorage } = useUser()
 
@@ -125,6 +161,8 @@
 		name: "NavBar",
 		setup() {
 			const { alerts, alertCount, listenToAlerts, clearAlerts } = useAlert()
+			const { theme, crtEnabled, themes, setTheme, toggleCrt } = useTheme()
+			const { open: openPalette } = usePalette()
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const socket = ref<any | null>(null)
 
@@ -142,7 +180,7 @@
 				socket.value?.disconnect()
 			})
 
-			return { alerts, alertCount, clearAlerts }
+			return { alerts, alertCount, clearAlerts, theme, crtEnabled, themes, setTheme, toggleCrt, openPalette }
 		},
 		data(): DataComponent {
 			const role = localStorage.getItem("role")
@@ -152,6 +190,7 @@
 			const items: MenuItem[] = [
 				{ path: "/home", name: "Dashboard", icon: "◈" },
 				{ path: "/sensors", name: "Mes capteurs", icon: "⬡" },
+				{ path: "/zones", name: "Zones", icon: "▦" },
 				{ path: "/history", name: "Historique", icon: "⊞" },
 				{ path: "/user", name: "Mon profil", icon: "◎" },
 			]
@@ -323,6 +362,96 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	/* ── Poste de commande ── */
+	.cmd-btn {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		padding: 0.5rem 0.65rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border-bright);
+		cursor: pointer;
+		color: var(--color-text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		letter-spacing: 0.12em;
+		transition: color var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-fast);
+	}
+
+	.cmd-btn:hover {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
+		box-shadow: inset 0 0 18px var(--color-primary-dim);
+	}
+
+	.cmd-btn__keys {
+		display: flex;
+		gap: 2px;
+	}
+
+	.cmd-btn__keys kbd,
+	.cmd-btn__label {
+		font-family: var(--font-mono);
+	}
+
+	.cmd-btn__keys kbd {
+		border: 1px solid var(--color-border-bright);
+		padding: 0 4px;
+		font-size: 0.6rem;
+		color: var(--color-text-muted);
+	}
+
+	.deck {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.theme-swatches {
+		display: flex;
+		gap: 6px;
+	}
+
+	.swatch {
+		width: 16px;
+		height: 16px;
+		border: 1px solid var(--color-border-bright);
+		border-radius: 50%;
+		cursor: pointer;
+		padding: 0;
+		transition: transform var(--dur-fast), box-shadow var(--dur-fast);
+	}
+
+	.swatch:hover {
+		transform: scale(1.15);
+	}
+
+	.swatch.active {
+		border-color: var(--color-text);
+		box-shadow: 0 0 0 2px var(--color-background), 0 0 0 3px var(--color-primary);
+	}
+
+	.crt-toggle {
+		padding: 2px 8px;
+		background: none;
+		border: 1px solid var(--color-border-bright);
+		color: var(--color-text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		letter-spacing: 0.1em;
+		cursor: pointer;
+		transition: all var(--dur-fast);
+	}
+
+	.crt-toggle.on {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
+		box-shadow: inset 0 0 12px var(--color-primary-dim), 0 0 8px var(--color-primary-glow);
+		text-shadow: 0 0 6px var(--color-primary-glow);
 	}
 
 	.footer-top {

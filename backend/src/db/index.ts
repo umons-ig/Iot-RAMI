@@ -10,6 +10,7 @@ import defineSessionDataModel from "@models/session";
 import defineUserModel from "@models/user";
 import defineUserSensorAccessModel from "@models/userSensorAccess";
 import defineThresholdModel from "@models/threshold";
+import defineZoneModel from "@models/zone";
 
 import type { MeasurementStatic } from "#/measurement";
 import type { MeasurementTypeStatic } from "#/measurementType";
@@ -18,6 +19,7 @@ import type { SensorStatic, UserSensorAccessStatic } from "#/sensor";
 import type { SessionStatic } from "#/session";
 import type { UserStatic } from "#/user";
 import type { ThresholdStatic } from "@/types/threshold";
+import type { ZoneStatic } from "#/zone";
 
 export interface Database {
   Measurement: MeasurementStatic;
@@ -28,6 +30,7 @@ export interface Database {
   User: UserStatic;
   UserSensorAccess: UserSensorAccessStatic;
   Threshold: ThresholdStatic;
+  Zone: ZoneStatic;
   sequelize: Sequelize;
   Sequelize: typeof Sequelize;
 }
@@ -88,6 +91,7 @@ addModelToDb(sequelize, DataTypes, defineSessionDataModel, db);
 addModelToDb(sequelize, DataTypes, defineUserModel, db);
 addModelToDb(sequelize, DataTypes, defineUserSensorAccessModel, db);
 addModelToDb(sequelize, DataTypes, defineThresholdModel, db);
+addModelToDb(sequelize, DataTypes, defineZoneModel, db);
 // run `.associate` if applicable
 Object.keys(db).map((modelName) => {
   const entry = db[modelName] as {

@@ -6,6 +6,7 @@ interface SensorCreation {
   id?: string;
   name?: string;
   topic?: string;
+  zoneId?: string | null;
   createdAt?: string; // We need to convert the Date to string
   updatedAt?: string; // We need to convert the Date to string
 }
@@ -14,6 +15,7 @@ interface Sensor {
   id: string;
   name: string;
   topic: string;
+  zoneId?: string | null;
   createdAt?: string; // We need to convert the Date to string
   updatedAt?: string; // We need to convert the Date to string
 }
