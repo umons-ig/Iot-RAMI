@@ -123,6 +123,13 @@
 		}
 	}
 
+	// Sélection d'une commande au clic (évite un handler inline multi-instructions
+	// que le compilateur de templates Vue refuse de parser).
+	function select(cmd: Command) {
+		closePalette()
+		cmd.run()
+	}
+
 	function move(delta: number) {
 		const n = filtered.value.length
 		if (n === 0) return
@@ -195,10 +202,7 @@
 							:key="cmd.id"
 							class="palette__item"
 							:class="{ active: flatIndex(cmd) === activeIndex }"
-							@click="
-								closePalette()
-								cmd.run()
-							"
+							@click="select(cmd)"
 							@mousemove="activeIndex = flatIndex(cmd)">
 							<span class="palette__glyph">{{ cmd.glyph }}</span>
 							<span class="palette__label">{{ cmd.label }}</span>
