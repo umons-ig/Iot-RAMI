@@ -4,7 +4,10 @@
       container_name: iot-rami-db
       restart: always
       ports:
-        - "5432:5432"
+        # Bind localhost uniquement : le backend joint la DB via le réseau Docker
+        # interne (DB_HOST=node-db). Ce mapping ne sert qu'à un accès local
+        # (psql/migrations sur la VM) et NE DOIT PAS être exposé publiquement.
+        - "127.0.0.1:5432:5432"
       environment:
         POSTGRES_USER: ${DB_USER}
         POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -25,6 +28,14 @@
       container_name: iot-rami-kafka
       restart: always
       ports:
+        # ⚠️ 9092 = listener PLAINTEXT_HOST, requis par le fog DISTANT
+        # (KAFKA_BROKERS=${SERVER_HOST}:9092). Il NE PEUT PAS être fermé tant que
+        # le lien fog→cloud n'est pas chiffré. PLAINTEXT sans auth = lecture/injection
+        # de mesures par quiconque atteint ce port.
+        # OBLIGATOIRE : restreindre la source au seul fog via le firewall de la VM,
+        # ex. `ufw allow from <IP_FOG> to any port 9092 && ufw deny 9092`.
+        # Fix définitif : tunnel WireGuard fog↔cloud (cf. PLAN_AMELIORATIONS §0.4)
+        # puis binder ce port sur l'interface WireGuard / 127.0.0.1.
         - "9092:9092"
       environment:
         KAFKA_NODE_ID: 1
@@ -126,7 +137,9 @@
       container_name: iot-rami-prometheus
       restart: always
       ports:
-        - "9090:9090"
+        # Bind localhost : Grafana scrape Prometheus via le réseau Docker interne
+        # (prometheus:9090). Inutile d'exposer les métriques brutes publiquement.
+        - "127.0.0.1:9090:9090"
       volumes:
         - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       depends_on:
