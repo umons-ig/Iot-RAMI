@@ -1,6 +1,7 @@
 import { ref } from "vue"
 import type { Zone, ZoneTreeNode } from "#/zone"
 import type { Sensor } from "#/sensor"
+import type { ZoneAccess } from "#/team"
 import { useAxios } from "@/composables/useAxios.composable"
 
 /**
@@ -63,6 +64,20 @@ export const useZone = () => {
 		return data
 	}
 
+	// ── Accès à une zone (users + teams), accordé en cascade sur le sous-arbre ──
+	const fetchZoneAccess = async (zoneId: string): Promise<ZoneAccess> => {
+		const { data } = await axios.get<ZoneAccess>(`/zones/${zoneId}/access`)
+		return data
+	}
+
+	const grantZoneAccess = async (zoneId: string, target: { userId?: string; teamId?: string }) => {
+		await axios.post(`/zones/${zoneId}/access`, target)
+	}
+
+	const revokeZoneAccess = async (zoneId: string, target: { userId?: string; teamId?: string }) => {
+		await axios.delete(`/zones/${zoneId}/access`, { data: target })
+	}
+
 	return {
 		tree,
 		zonesFlat,
@@ -76,5 +91,8 @@ export const useZone = () => {
 		updateZone,
 		deleteZone,
 		assignSensor,
+		fetchZoneAccess,
+		grantZoneAccess,
+		revokeZoneAccess,
 	}
 }

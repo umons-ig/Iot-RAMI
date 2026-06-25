@@ -56,6 +56,7 @@
 		]
 		if (isAdmin) {
 			base.push(
+				{ id: "nav-teams", label: "Équipes", hint: "/teams", group: "Navigation", glyph: "▣", keywords: "teams equipes groupes membres acces", run: () => go("/teams") },
 				{ id: "nav-users", label: "Utilisateurs", hint: "/users/all", group: "Navigation", glyph: "⬟", keywords: "users admin", run: () => go("/users/all") },
 				{ id: "nav-admin", label: "Administration", hint: "/admin", group: "Navigation", glyph: "⬠", keywords: "admin panel", run: () => go("/admin") }
 			)

@@ -99,6 +99,14 @@ const router = createRouter({
 				requiresAuth: true,
 			},
 		},
+		{
+			path: "/teams",
+			name: "teams",
+			component: () => import("@/views/team/TeamsView.vue"),
+			meta: {
+				requiresAuth: true,
+			},
+		},
 	],
 })
 
@@ -121,7 +129,7 @@ router.beforeEach(async (to, from, next) => {
 		cleanUserLocalStorage()
 		return next("/")
 	}
-	if (to.name === "admin") {
+	if (to.name === "admin" || to.name === "teams") {
 		const res = await canAccessAdminPanel()
 		if (!res || !res.canAccess) {
 			return next("/")
