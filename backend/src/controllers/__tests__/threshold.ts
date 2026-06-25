@@ -155,6 +155,51 @@ describe("Threshold controller", () => {
       expect(result.body.code).toBe("threshold.missing.fields");
     });
 
+    test("should return 400 if idSensor is not a valid UUID (§2.6)", async () => {
+      const result = await superTest(app)
+        .post(baseUri)
+        .send({
+          idSensor: "not-a-uuid",
+          idMeasurementType: measurementTypeId,
+          minValue: 10,
+          maxValue: 100,
+        })
+        .set("Authorization", "Bearer test-token");
+
+      expect(result.status).toBe(400);
+      expect(result.body.code).toBe("threshold.invalid.id");
+    });
+
+    test("should return 400 if minValue >= maxValue (§2.6)", async () => {
+      const result = await superTest(app)
+        .post(baseUri)
+        .send({
+          idSensor: sensorId,
+          idMeasurementType: measurementTypeId,
+          minValue: 100,
+          maxValue: 10,
+        })
+        .set("Authorization", "Bearer test-token");
+
+      expect(result.status).toBe(400);
+      expect(result.body.code).toBe("threshold.invalid.range");
+    });
+
+    test("should return 400 if a value is not numeric (§2.6)", async () => {
+      const result = await superTest(app)
+        .post(baseUri)
+        .send({
+          idSensor: sensorId,
+          idMeasurementType: measurementTypeId,
+          minValue: "abc",
+          maxValue: 100,
+        })
+        .set("Authorization", "Bearer test-token");
+
+      expect(result.status).toBe(400);
+      expect(result.body.code).toBe("threshold.invalid.value");
+    });
+
     test("should return 500 if Threshold.create throws an error", async () => {
       ThresholdModel.create = jest
         .fn()

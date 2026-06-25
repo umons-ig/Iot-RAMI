@@ -11,6 +11,7 @@ import { NotFoundException } from "@utils/exceptions";
 import { globalLimiter, authLimiter } from "@middlewares/rateLimiter";
 import { metricsMiddleware } from "@middlewares/metrics";
 import { metricsRoutes } from "@routes/metrics";
+import { errorHandler } from "@middlewares/errorHandler";
 
 const app: Express = express();
 
@@ -73,5 +74,8 @@ app.all("*", (_req, res) => {
     .status(404)
     .json(new NotFoundException("Resource not found", "resource.not.found"));
 });
+
+// Filet de sécurité global : doit être enregistré en dernier (cf. §2.4).
+app.use(errorHandler);
 
 export default app;
