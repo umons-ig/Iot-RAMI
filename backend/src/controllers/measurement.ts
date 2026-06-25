@@ -170,6 +170,72 @@ const getSample = ({
   return sampleTmp;
 };
 
+/**
+ * Capteurs accessibles via les ZONES accordées à l'utilisateur (directement
+ * ou via ses teams), en CASCADE sur le sous-arbre : un accès « Bâtiment A »
+ * donne accès à tous les capteurs des étages/pièces sous A.
+ */
+const zoneGrantedSensorIds = async (userId: string): Promise<string[]> => {
+  // 1. Zones accordées directement à l'utilisateur.
+  const userGrants = await DB.UserZoneAccess.findAll({
+    attributes: ["zoneId"],
+    where: { userId },
+    raw: true,
+  });
+  // 2. Zones accordées aux teams dont l'utilisateur est membre.
+  const memberships = await DB.TeamMember.findAll({
+    attributes: ["teamId"],
+    where: { userId },
+    raw: true,
+  });
+  const teamIds = memberships.map((m: any) => m.teamId);
+  let teamGrants: any[] = [];
+  if (teamIds.length > 0) {
+    teamGrants = await DB.TeamZoneAccess.findAll({
+      attributes: ["zoneId"],
+      where: { teamId: { [Op.in]: teamIds } },
+      raw: true,
+    });
+  }
+
+  const grantedZoneIds = new Set<string>([
+    ...userGrants.map((g: any) => g.zoneId),
+    ...teamGrants.map((g: any) => g.zoneId),
+  ]);
+  if (grantedZoneIds.size === 0) return [];
+
+  // 3. Expansion au sous-arbre : on construit la table parent -> enfants
+  //    puis on descend depuis chaque zone accordée (cascade).
+  const allZones = await DB.Zone.findAll({
+    attributes: ["id", "parentId"],
+    raw: true,
+  });
+  const childrenMap = new Map<string, string[]>();
+  allZones.forEach((z: any) => {
+    if (z.parentId) {
+      const arr = childrenMap.get(z.parentId) ?? [];
+      arr.push(z.id);
+      childrenMap.set(z.parentId, arr);
+    }
+  });
+  const expanded = new Set<string>();
+  const stack = [...grantedZoneIds];
+  while (stack.length) {
+    const zid = stack.pop();
+    if (!zid || expanded.has(zid)) continue;
+    expanded.add(zid);
+    for (const c of childrenMap.get(zid) ?? []) stack.push(c);
+  }
+
+  // 4. Capteurs rattachés à l'une de ces zones.
+  const sensors = await DB.Sensor.findAll({
+    attributes: ["id"],
+    where: { zoneId: { [Op.in]: Array.from(expanded) } },
+    raw: true,
+  });
+  return sensors.map((s: any) => s.id);
+};
+
 const getSensorsAvailable = async (decodedToken: UserPayload, name = false) => {
   const result = await UserSensorAccess.findAll({
     where: {
@@ -177,20 +243,22 @@ const getSensorsAvailable = async (decodedToken: UserPayload, name = false) => {
       status: Status.ACCEPTED,
     },
   });
-  if (!result) {
-    throw new NotFoundException(
-      "No sensors found !",
-      "measurement.sensor.not.found"
-    );
-  }
+
+  // Accès = capteurs accordés individuellement ∪ capteurs des zones accordées
+  // (à l'utilisateur ou à ses teams), en cascade.
+  const individualIds = (result ?? []).map(
+    (sensor: any) => sensor.dataValues.sensorId
+  );
+  const zoneIds = await zoneGrantedSensorIds(decodedToken.userId);
+  const allIds = Array.from(new Set([...individualIds, ...zoneIds]));
 
   if (!name) {
-    return result.map((sensor: any) => sensor.dataValues.sensorId);
+    return allIds;
   }
 
   const sensorNames = await Sensor.findAll({
     attributes: ["name"],
-    where: { id: result.map((sensor: any) => sensor.dataValues.sensorId) },
+    where: { id: allIds },
   });
 
   return sensorNames.map((sensorName: any) => sensorName.dataValues.name);

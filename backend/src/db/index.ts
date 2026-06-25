@@ -11,6 +11,10 @@ import defineUserModel from "@models/user";
 import defineUserSensorAccessModel from "@models/userSensorAccess";
 import defineThresholdModel from "@models/threshold";
 import defineZoneModel from "@models/zone";
+import defineTeamModel from "@models/team";
+import defineTeamMemberModel from "@models/teamMember";
+import defineUserZoneAccessModel from "@models/userZoneAccess";
+import defineTeamZoneAccessModel from "@models/teamZoneAccess";
 
 import type { MeasurementStatic } from "#/measurement";
 import type { MeasurementTypeStatic } from "#/measurementType";
@@ -20,6 +24,12 @@ import type { SessionStatic } from "#/session";
 import type { UserStatic } from "#/user";
 import type { ThresholdStatic } from "@/types/threshold";
 import type { ZoneStatic } from "#/zone";
+import type {
+  TeamStatic,
+  TeamMemberStatic,
+  UserZoneAccessStatic,
+  TeamZoneAccessStatic,
+} from "#/team";
 
 export interface Database {
   Measurement: MeasurementStatic;
@@ -31,6 +41,10 @@ export interface Database {
   UserSensorAccess: UserSensorAccessStatic;
   Threshold: ThresholdStatic;
   Zone: ZoneStatic;
+  Team: TeamStatic;
+  TeamMember: TeamMemberStatic;
+  UserZoneAccess: UserZoneAccessStatic;
+  TeamZoneAccess: TeamZoneAccessStatic;
   sequelize: Sequelize;
   Sequelize: typeof Sequelize;
 }
@@ -92,6 +106,10 @@ addModelToDb(sequelize, DataTypes, defineUserModel, db);
 addModelToDb(sequelize, DataTypes, defineUserSensorAccessModel, db);
 addModelToDb(sequelize, DataTypes, defineThresholdModel, db);
 addModelToDb(sequelize, DataTypes, defineZoneModel, db);
+addModelToDb(sequelize, DataTypes, defineTeamModel, db);
+addModelToDb(sequelize, DataTypes, defineTeamMemberModel, db);
+addModelToDb(sequelize, DataTypes, defineUserZoneAccessModel, db);
+addModelToDb(sequelize, DataTypes, defineTeamZoneAccessModel, db);
 // run `.associate` if applicable
 Object.keys(db).map((modelName) => {
   const entry = db[modelName] as {

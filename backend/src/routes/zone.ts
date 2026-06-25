@@ -8,6 +8,9 @@ import {
   updateZone,
   deleteZone,
   assignSensor,
+  getZoneAccess,
+  grantZoneAccess,
+  revokeZoneAccess,
 } from "@controllers/zone";
 import { auth, authAdmin } from "@middlewares/auth";
 
@@ -26,5 +29,10 @@ router.delete("/:id", authAdmin, deleteZone);
 router.get("/:id/sensors", auth, getZoneSensors);
 // :id = zoneId, ou "none" pour détacher un capteur de toute zone.
 router.put("/:id/sensors", authAdmin, assignSensor);
+
+// Accès à une zone (users + teams) — accordé en cascade sur le sous-arbre.
+router.get("/:id/access", authAdmin, getZoneAccess);
+router.post("/:id/access", authAdmin, grantZoneAccess);
+router.delete("/:id/access", authAdmin, revokeZoneAccess);
 
 export { router as zoneRoutes };
