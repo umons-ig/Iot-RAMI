@@ -311,6 +311,102 @@ const handleError = (res: Response, error: any, action: string) => {
   });
 };
 
+/* ─────────────── Accès à une zone (users + teams) ─────────────── */
+
+// GET /zones/:id/access → qui a un accès DIRECT à cette zone (hors cascade).
+const getZoneAccess = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const zone = await Zone.findByPk(id);
+    if (!zone) throw new NotFoundException("Zone not found", "zone.not.found");
+
+    const [userGrants, teamGrants] = await Promise.all([
+      DB.UserZoneAccess.findAll({
+        where: { zoneId: id },
+        include: [
+          {
+            model: DB.User,
+            attributes: ["id", "firstName", "lastName", "email"],
+          },
+        ],
+      }),
+      DB.TeamZoneAccess.findAll({
+        where: { zoneId: id },
+        include: [{ model: DB.Team, attributes: ["id", "name"] }],
+      }),
+    ]);
+
+    return res.status(200).json({
+      users: userGrants
+        .map((g: any) => g.User ?? g.dataValues?.User)
+        .filter(Boolean),
+      teams: teamGrants
+        .map((g: any) => g.Team ?? g.dataValues?.Team)
+        .filter(Boolean),
+    });
+  } catch (error) {
+    return handleError(res, error, "fetching access of");
+  }
+};
+
+// POST /zones/:id/access  body { userId } | { teamId } → accorde l'accès (cascade).
+const grantZoneAccess = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId, teamId } = req.body;
+    if (!userId && !teamId) {
+      throw new BadRequestException(
+        "userId or teamId is required",
+        "zone.access.target.required"
+      );
+    }
+    const zone = await Zone.findByPk(id);
+    if (!zone) throw new NotFoundException("Zone not found", "zone.not.found");
+
+    if (userId) {
+      const user = await DB.User.findByPk(userId);
+      if (!user)
+        throw new NotFoundException("User not found", "user.not.found");
+      const [grant] = await DB.UserZoneAccess.findOrCreate({
+        where: { userId, zoneId: id },
+        defaults: { userId, zoneId: id },
+      });
+      return res.status(201).json(grant);
+    }
+    const team = await DB.Team.findByPk(teamId);
+    if (!team) throw new NotFoundException("Team not found", "team.not.found");
+    const [grant] = await DB.TeamZoneAccess.findOrCreate({
+      where: { teamId, zoneId: id },
+      defaults: { teamId, zoneId: id },
+    });
+    return res.status(201).json(grant);
+  } catch (error) {
+    return handleError(res, error, "granting access to");
+  }
+};
+
+// DELETE /zones/:id/access  body { userId } | { teamId } → retire l'accès.
+const revokeZoneAccess = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId, teamId } = req.body;
+    if (!userId && !teamId) {
+      throw new BadRequestException(
+        "userId or teamId is required",
+        "zone.access.target.required"
+      );
+    }
+    if (userId) {
+      await DB.UserZoneAccess.destroy({ where: { userId, zoneId: id } });
+    } else {
+      await DB.TeamZoneAccess.destroy({ where: { teamId, zoneId: id } });
+    }
+    return res.status(204).send();
+  } catch (error) {
+    return handleError(res, error, "revoking access to");
+  }
+};
+
 export {
   createZone,
   getZones,
@@ -320,4 +416,7 @@ export {
   updateZone,
   deleteZone,
   assignSensor,
+  getZoneAccess,
+  grantZoneAccess,
+  revokeZoneAccess,
 };

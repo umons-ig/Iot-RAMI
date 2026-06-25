@@ -196,6 +196,7 @@
 			]
 
 			if (isAdmin) {
+				items.push({ path: "/teams", name: "Équipes", icon: "▣" })
 				items.push({ path: "/users/all", name: "Utilisateurs", icon: "⬟" })
 				items.push({ path: "/admin", name: "Administration", icon: "⬠" })
 			}

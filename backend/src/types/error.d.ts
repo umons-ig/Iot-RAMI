@@ -173,7 +173,14 @@ type APIZoneErrors =
   | "zone.parent.cycle"
   | "zone.not.found"
   | "zone.not.empty"
-  | "zone.sensor.required";
+  | "zone.sensor.required"
+  | "zone.access.target.required";
+
+type APITeamErrors =
+  | "team.name.required"
+  | "team.not.found"
+  | "team.member.required"
+  | "team.member.not.found";
 
 type APIServerErrors = "server.error" | "resource.not.found";
 
@@ -188,6 +195,7 @@ type APIErrors =
   | AuthErrors
   | APIUserSensorErrors
   | APIThresholdErrors
-  | APIZoneErrors;
+  | APIZoneErrors
+  | APITeamErrors;
 
 export { APIErrors };

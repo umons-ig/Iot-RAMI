@@ -2,12 +2,19 @@
 	import { ref, computed, onMounted } from "vue"
 	import type { ZoneTreeNode } from "#/zone"
 	import type { Sensor } from "#/sensor"
+	import type { Team, ZoneAccess } from "#/team"
+	import type { User } from "#/user"
 	import ZoneTree from "@/components/zone/ZoneTree.vue"
 	import { useZone } from "@/composables/useZone.composable"
+	import { useTeam } from "@/composables/useTeam.composable"
+	import { useUser } from "@/composables/useUser.composable"
 	import { useAxios } from "@/composables/useAxios.composable"
 	import { useToast } from "@/composables/useToast.composable"
 
-	const { tree, zoneSensors, loading, fetchTree, fetchZoneSensors, createZone, updateZone, deleteZone, assignSensor } = useZone()
+	// eslint-disable-next-line max-len
+	const { tree, zoneSensors, loading, fetchTree, fetchZoneSensors, createZone, updateZone, deleteZone, assignSensor, fetchZoneAccess, grantZoneAccess, revokeZoneAccess } = useZone()
+	const { fetchTeams } = useTeam()
+	const { getAllUsers } = useUser()
 	const { axios } = useAxios()
 	const toast = useToast()
 
@@ -15,6 +22,13 @@
 	const allSensors = ref<Sensor[]>([])
 	const sensorFilter = ref("")
 	const sensorToAssign = ref("")
+
+	// ── Accès à la zone (users + teams) ──
+	const zoneAccess = ref<ZoneAccess>({ users: [], teams: [] })
+	const allUsers = ref<User[]>([])
+	const allTeams = ref<Team[]>([])
+	const grantUserId = ref("")
+	const grantTeamId = ref("")
 
 	// ── Modale créer / éditer ────────────────────────────────
 	const modal = ref<{ mode: "create" | "edit"; parentId: string | null; id?: string } | null>(null)
@@ -37,14 +51,75 @@
 	}
 
 	onMounted(async () => {
-		await Promise.all([fetchTree(), loadAllSensors()])
+		const tasks: Promise<unknown>[] = [fetchTree(), loadAllSensors()]
+		if (isAdmin) {
+			tasks.push(
+				fetchTeams().then(t => (allTeams.value = t)),
+				getAllUsers().then(u => (allUsers.value = u))
+			)
+		}
+		await Promise.all(tasks.map(p => Promise.resolve(p).catch(() => undefined)))
 	})
 
 	async function selectZone(node: ZoneTreeNode) {
 		selected.value = node
 		sensorFilter.value = ""
 		sensorToAssign.value = ""
+		grantUserId.value = ""
+		grantTeamId.value = ""
+		zoneAccess.value = { users: [], teams: [] }
 		await fetchZoneSensors(node.id)
+		if (isAdmin) {
+			zoneAccess.value = await fetchZoneAccess(node.id).catch(() => ({ users: [], teams: [] }))
+		}
+	}
+
+	// Users / teams pas encore accordés à cette zone (candidats au picker).
+	const grantableUsers = computed(() => {
+		const have = new Set(zoneAccess.value.users.map(u => u.id))
+		return allUsers.value.filter(u => !have.has(u.id))
+	})
+	const grantableTeams = computed(() => {
+		const have = new Set(zoneAccess.value.teams.map(t => t.id))
+		return allTeams.value.filter(t => !have.has(t.id))
+	})
+
+	async function refreshAccess() {
+		if (selected.value) zoneAccess.value = await fetchZoneAccess(selected.value.id)
+	}
+	async function doGrantUser() {
+		if (!grantUserId.value || !selected.value) return
+		try {
+			await grantZoneAccess(selected.value.id, { userId: grantUserId.value })
+			grantUserId.value = ""
+			await refreshAccess()
+			toast.success("Accès accordé", "Utilisateur")
+		} catch {
+			toast.danger("Échec", "Accès non accordé.")
+		}
+	}
+	async function doGrantTeam() {
+		if (!grantTeamId.value || !selected.value) return
+		try {
+			await grantZoneAccess(selected.value.id, { teamId: grantTeamId.value })
+			grantTeamId.value = ""
+			await refreshAccess()
+			toast.success("Accès accordé", "Équipe")
+		} catch {
+			toast.danger("Échec", "Accès non accordé.")
+		}
+	}
+	async function revokeUser(userId: string) {
+		if (!selected.value) return
+		await revokeZoneAccess(selected.value.id, { userId })
+		await refreshAccess()
+		toast.info("Accès retiré", "Utilisateur")
+	}
+	async function revokeTeam(teamId: string) {
+		if (!selected.value) return
+		await revokeZoneAccess(selected.value.id, { teamId })
+		await refreshAccess()
+		toast.info("Accès retiré", "Équipe")
 	}
 
 	const filteredSensors = computed(() => {
@@ -297,6 +372,100 @@
 								<span class="subzone-meta">↳ {{ subtreeStats(child).sensors }} capt. · {{ child.children.length }} z.</span>
 							</button>
 						</div>
+					</div>
+
+					<!-- Accès à la zone (users + teams) -->
+					<div
+						v-if="isAdmin"
+						class="access-panel">
+						<p class="access-head">
+							ACCÈS À CETTE ZONE
+							<span class="access-hint">↳ inclut tout le sous-arbre</span>
+						</p>
+
+						<div class="access-grant-row">
+							<select
+								v-model="grantUserId"
+								class="access-select"
+								aria-label="Accorder à un utilisateur">
+								<option
+									value=""
+									disabled>
+									+ UTILISATEUR…
+								</option>
+								<option
+									v-for="u in grantableUsers"
+									:key="u.id"
+									:value="u.id">
+									{{ u.firstName }} {{ u.lastName }}
+								</option>
+							</select>
+							<button
+								class="access-btn"
+								:disabled="!grantUserId"
+								@click="doGrantUser">
+								ACCORDER
+							</button>
+						</div>
+
+						<div class="access-grant-row">
+							<select
+								v-model="grantTeamId"
+								class="access-select"
+								aria-label="Accorder à une équipe">
+								<option
+									value=""
+									disabled>
+									+ ÉQUIPE…
+								</option>
+								<option
+									v-for="t in grantableTeams"
+									:key="t.id"
+									:value="t.id">
+									{{ t.name }}
+								</option>
+							</select>
+							<button
+								class="access-btn"
+								:disabled="!grantTeamId"
+								@click="doGrantTeam">
+								ACCORDER
+							</button>
+						</div>
+
+						<div
+							v-if="zoneAccess.users.length || zoneAccess.teams.length"
+							class="access-chips">
+							<span
+								v-for="u in zoneAccess.users"
+								:key="'u-' + u.id"
+								class="access-chip access-chip--user">
+								◎ {{ u.firstName }} {{ u.lastName }}
+								<button
+									class="access-chip-x"
+									aria-label="Retirer l'accès"
+									@click="revokeUser(u.id)">
+									✕
+								</button>
+							</span>
+							<span
+								v-for="t in zoneAccess.teams"
+								:key="'t-' + t.id"
+								class="access-chip access-chip--team">
+								▣ {{ t.name }}
+								<button
+									class="access-chip-x"
+									aria-label="Retirer l'accès"
+									@click="revokeTeam(t.id)">
+									✕
+								</button>
+							</span>
+						</div>
+						<p
+							v-else
+							class="access-empty">
+							AUCUN ACCÈS DIRECT — SEULS LES ADMINS VOIENT CETTE ZONE.
+						</p>
 					</div>
 
 					<!-- Affectation -->
@@ -697,6 +866,106 @@
 		font-size: 0.56rem;
 		color: var(--color-text-muted);
 		margin-top: 2px;
+	}
+
+	/* Panneau d'accès (users + teams) */
+	.access-panel {
+		padding: 0.9rem 1rem 0;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.access-head {
+		font-family: var(--font-mono);
+		font-size: 0.58rem;
+		letter-spacing: 0.12em;
+		color: var(--color-text);
+		text-transform: uppercase;
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 8px;
+	}
+	.access-hint {
+		font-size: 0.5rem;
+		color: var(--color-text-muted);
+		letter-spacing: 0.06em;
+		text-transform: none;
+	}
+	.access-grant-row {
+		display: flex;
+		gap: 8px;
+	}
+	.access-select {
+		flex: 1;
+		min-width: 0;
+		background: var(--color-background);
+		border: 1px solid var(--color-border-bright);
+		color: var(--color-text);
+		font-family: var(--font-mono);
+		font-size: 0.64rem;
+		padding: 0.4rem 0.5rem;
+		text-transform: uppercase;
+	}
+	.access-select:focus {
+		outline: none;
+		border-color: var(--color-info);
+		box-shadow: inset 0 0 12px var(--color-info-dim);
+	}
+	.access-btn {
+		flex-shrink: 0;
+		padding: 0 0.8rem;
+		background: var(--color-info-dim);
+		border: 1px solid var(--color-info);
+		color: var(--color-info);
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		letter-spacing: 0.06em;
+		cursor: pointer;
+	}
+	.access-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.access-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 2px;
+	}
+	.access-chip {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 3px 8px;
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		border: 1px solid var(--color-border-bright);
+		background: var(--color-surface-secondary);
+		color: var(--color-text);
+	}
+	.access-chip--team {
+		border-left: 2px solid var(--color-info);
+	}
+	.access-chip--user {
+		border-left: 2px solid var(--color-primary);
+	}
+	.access-chip-x {
+		background: none;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		font-size: 0.55rem;
+		padding: 0;
+	}
+	.access-chip-x:hover {
+		color: var(--color-danger);
+	}
+	.access-empty {
+		font-family: var(--font-mono);
+		font-size: 0.56rem;
+		color: var(--color-text-muted);
+		letter-spacing: 0.06em;
 	}
 
 	.assign-row {
