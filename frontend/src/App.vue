@@ -1,6 +1,12 @@
 <script lang="ts" setup>
 	import { RouterView } from "vue-router"
 	import NavBar from "@/components/NavBar.vue"
+	import CommandPalette from "@/components/system/CommandPalette.vue"
+	import ToastHost from "@/components/system/ToastHost.vue"
+	import { useTheme } from "@/composables/useTheme.composable"
+
+	// Applique le thème + l'effet CRT persistés dès le montage de l'app.
+	useTheme()
 </script>
 
 <template>
@@ -9,6 +15,8 @@
 		<main class="content">
 			<RouterView />
 		</main>
+		<CommandPalette />
+		<ToastHost />
 	</div>
 </template>
 

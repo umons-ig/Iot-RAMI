@@ -54,6 +54,85 @@
     --font-display: 'Big Shoulders Display', Impact, condensed, sans-serif;
     --font-sans: 'Martian Mono', 'Courier New', monospace; /* identique à --font-mono, conservé pour compatibilité */
     --font-mono: 'Martian Mono', 'Courier New', monospace;
+
+    /* ── Échelle d'espacement (base 4px) ── */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-8: 48px;
+
+    /* ── Échelle de z-index (cf. recommandation ui-ux) ── */
+    --z-base: 1;
+    --z-sticky: 20;
+    --z-sidebar: 100;
+    --z-overlay: 300;
+    --z-toast: 400;
+    --z-palette: 500;
+    --z-boot: 900;
+
+    /* ── Motion ── */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 320ms;
+
+    /* ── Intensité de l'effet CRT (pilotée par [data-crt]) ── */
+    --crt-scanline-opacity: 0;
+    --crt-flicker: 0;
+}
+
+/* ════════════════════════════════════════════════════════
+   THÈMES EXPLICITES (pilotés par <html data-theme="...">)
+   Priorité sur la préférence système quand l'utilisateur choisit.
+   ════════════════════════════════════════════════════════ */
+
+/* Vert phosphore — esthétique oscilloscope / VT220 */
+:root[data-theme='green'] {
+    --color-background: #000a02;
+    --color-surface: #021004;
+    --color-surface-secondary: #04190a;
+
+    --color-sidebar-bg: #010d03;
+    --color-sidebar-text: #2f8f46;
+    --color-sidebar-text-active: #b6ffce;
+    --color-sidebar-hover: rgba(57, 255, 110, 0.07);
+    --color-sidebar-active: #39ff6e;
+
+    --color-primary: #39ff6e;
+    --color-primary-hover: #28e85a;
+    --color-primary-glow: rgba(57, 255, 110, 0.2);
+    --color-primary-dim: rgba(57, 255, 110, 0.08);
+
+    --color-secondary: #042d12;
+    --color-secondary-hover: #064019;
+
+    --color-text: #b6ffce;
+    --color-text-muted: #2f8f46;
+    --color-text-second: #000a02;
+
+    --color-border: #093a17;
+    --color-border-bright: #0e5a24;
+
+    --color-success: #39ff14;
+    --color-success-dim: rgba(57, 255, 20, 0.14);
+    --color-danger: #ff5a5a;
+    --color-danger-dim: rgba(255, 90, 90, 0.14);
+    --color-warning: #d8ff00;
+    --color-info: #00ffd0;
+    --color-info-dim: rgba(0, 255, 208, 0.14);
+
+    --color-shadow: rgba(57, 255, 110, 0.05);
+    --color-overlay: rgba(0, 0, 0, 0.25);
+    --color-overlay-light: rgba(0, 0, 0, 0.12);
+}
+
+/* Ambre explicite = thème par défaut (no-op, sert juste à forcer le dark) */
+:root[data-theme='amber'] {
+    color-scheme: dark;
 }
 
 *,
@@ -76,9 +155,45 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Thème clair (OS system preference) ── */
+/* ── Thème clair explicite (parchemin chaud) ── */
+:root[data-theme='light'] {
+    color-scheme: light;
+    --color-background: #f2ead8;
+    --color-surface: #ede3cc;
+    --color-surface-secondary: #e5d9bc;
+    --color-sidebar-bg: #e8deca;
+    --color-sidebar-text: #7a6030;
+    --color-sidebar-text-active: #1a1000;
+    --color-sidebar-hover: rgba(180, 100, 0, 0.08);
+    --color-sidebar-active: #b86e00;
+    --color-primary: #b86e00;
+    --color-primary-hover: #9a5c00;
+    --color-primary-glow: rgba(184, 110, 0, 0.22);
+    --color-primary-dim: rgba(184, 110, 0, 0.1);
+    --color-secondary: #d8ccb0;
+    --color-secondary-hover: #ccc0a0;
+    --color-text: #1a1200;
+    --color-text-muted: #7a6030;
+    --color-text-second: #f2ead8;
+    --color-border: #c8b896;
+    --color-border-bright: #b0996e;
+    --color-success: #1a8a00;
+    --color-success-hover: #157000;
+    --color-success-dim: rgba(26, 138, 0, 0.1);
+    --color-danger: #cc2200;
+    --color-danger-hover: #aa1800;
+    --color-danger-dim: rgba(204, 34, 0, 0.1);
+    --color-warning: #b88000;
+    --color-info: #0088cc;
+    --color-info-dim: rgba(0, 136, 204, 0.1);
+    --color-shadow: rgba(0, 0, 0, 0.08);
+    --color-overlay: rgba(0, 0, 0, 0.06);
+    --color-overlay-light: rgba(0, 0, 0, 0.03);
+}
+
+/* ── Thème clair (OS system preference) — uniquement si pas de choix explicite ── */
 @media (prefers-color-scheme: light) {
-    :root {
+    :root:not([data-theme]) {
         /* Arrière-plans — parchemin chaud */
         --color-background: #f2ead8;
         --color-surface: #ede3cc;
@@ -152,6 +267,68 @@ body {
     color: var(--color-text-second);
 }
 
+/* ════════════════════════════════════════════════════════
+   EFFET CRT — overlay plein écran (scanlines + flicker + vignette)
+   Activé via <html data-crt="on">. Coût GPU faible (pseudo-éléments fixes).
+   ════════════════════════════════════════════════════════ */
+:root[data-crt='on'] {
+    --crt-scanline-opacity: 0.5;
+    --crt-flicker: 1;
+}
+
+:root[data-crt='on'] body::before,
+:root[data-crt='on'] body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* Scanlines fines + vignette */
+:root[data-crt='on'] body::before {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 2px,
+            rgba(0, 0, 0, calc(0.18 * var(--crt-scanline-opacity))) 3px,
+            transparent 4px
+        ),
+        radial-gradient(ellipse 80% 70% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+/* Flicker + balayage lumineux lent */
+:root[data-crt='on'] body::after {
+    background: linear-gradient(to bottom, var(--color-primary-dim), transparent 12%);
+    background-size: 100% 8px;
+    opacity: 0.025;
+    animation: crt-flicker 7s steps(60) infinite;
+}
+
+@keyframes crt-flicker {
+    0%, 95%, 100% { opacity: 0.02; }
+    96% { opacity: 0.06; }
+    97% { opacity: 0.01; }
+    98% { opacity: 0.05; }
+}
+
+/* Utilitaire : révélation en cascade (animation-delay posé inline) */
+@keyframes rami-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.rami-rise {
+    animation: rami-rise var(--dur-slow) var(--ease-out) both;
+}
+
+/* Curseur de saisie clignotant (terminal) */
+@keyframes rami-caret {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
 /* Respect des préférences système : désactive les animations pour les utilisateurs sensibles */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -159,4 +336,5 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  :root[data-crt='on'] body::after { animation: none; }
 }
