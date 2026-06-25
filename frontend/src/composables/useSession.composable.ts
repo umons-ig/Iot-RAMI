@@ -139,6 +139,9 @@ const useSession = () => {
 	const timeSinceLastValue = ref(0)
 	const transmissionSpeed = ref(0)
 	const lastMessageTime = ref<Date | null>(null)
+	// État de connexion temps réel exposé à l'UI (badge LIVE / RECONNEXION…).
+	// Cf. PLAN_AMELIORATIONS §1.6.
+	const connectionState = ref<"connected" | "reconnecting" | "disconnected">("disconnected")
 
 	// **************************************************** METHODS ****************************************************
 	// *************************** [ATTRIBUTE]  LIST OF SESSIONS AND SELECTED SESSION
@@ -225,6 +228,7 @@ const useSession = () => {
 	const endSession = () => {
 		socketClient.value?.off("new-data")
 		socketClient.value?.disconnect()
+		connectionState.value = "disconnected"
 		cleanAfterSession()
 	}
 
@@ -246,10 +250,36 @@ const useSession = () => {
 			socketClient.value.disconnect()
 			socketClient.value = null
 		}
-		const token = localStorage.getItem(UserFields.TOKEN)
 		const socket = createSocket()
 		socketClient.value = socket
-		socket.emit("join-session", { topic, token })
+
+		// On (ré)émet join-session à CHAQUE (re)connexion : socket.io reconnecte
+		// tout seul après une coupure réseau/redémarrage backend, mais sans
+		// re-join le client ne recevait plus aucune donnée (room perdue). On lit
+		// le token au moment du join (il a pu être rafraîchi). Cf. §1.6.
+		const joinSession = () => {
+			const token = localStorage.getItem(UserFields.TOKEN)
+			socket.emit("join-session", { topic, token })
+		}
+		// Join initial (bufferisé par socket.io jusqu'à la connexion)…
+		joinSession()
+		// …puis re-join à chaque (re)connexion.
+		socket.on("connect", () => {
+			connectionState.value = "connected"
+			joinSession()
+		})
+		socket.on("disconnect", () => {
+			connectionState.value = "reconnecting"
+		})
+		socket.on("connect_error", () => {
+			connectionState.value = "reconnecting"
+		})
+		// `socket.io` est le Manager (présent sur le vrai client, optionnel ici
+		// pour rester robuste aux mocks de test).
+		socket.io?.on?.("reconnect_attempt", () => {
+			connectionState.value = "reconnecting"
+		})
+
 		socket.on("new-data", (data: any) => {
 			try {
 				if (!Array.isArray(data.measures)) return
@@ -381,6 +411,7 @@ const useSession = () => {
 		chartData,
 		timeSinceLastValue,
 		transmissionSpeed,
+		connectionState,
 		startSessionOnClientSide,
 		createSessionOnServerSide,
 		checkAndJoinActiveSession,

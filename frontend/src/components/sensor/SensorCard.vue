@@ -112,15 +112,24 @@
 				}
 			}
 
+			// Socket de statut (mode autonome uniquement). Référence au niveau du
+			// setup pour pouvoir la fermer dans un onUnmounted SYNCHRONE : appelé
+			// dans le callback onMounted, le hook n'était jamais attaché à
+			// l'instance (« onUnmounted is called when there is no active component
+			// instance ») -> disconnect() jamais exécuté -> fuite de socket à
+			// chaque navigation. Cf. PLAN_AMELIORATIONS §1.5.
+			let statusSocket: ReturnType<typeof listenToSensorStatus> | null = null
+
 			onMounted(() => {
 				// Sans statut externe : comportement autonome (appel HTTP + socket individuel)
 				if (!props.externalStatus) {
 					checkSensorStatus()
-					const socket = listenToSensorStatus()
-					onUnmounted(() => {
-						socket.disconnect()
-					})
+					statusSocket = listenToSensorStatus()
 				}
+			})
+
+			onUnmounted(() => {
+				statusSocket?.disconnect()
 			})
 
 			return {

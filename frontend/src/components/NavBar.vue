@@ -137,7 +137,7 @@
 
 <script lang="ts">
 	import { defineComponent, reactive, ref, onMounted, onUnmounted } from "vue"
-	import { io } from "socket.io-client"
+	import { useSocket } from "@/composables/useSocket.composable"
 	import { useUser } from "@/composables/useUser.composable"
 	import { useAlert } from "@/composables/useAlert.composable"
 	import { useTheme } from "@/composables/useTheme.composable"
@@ -166,12 +166,13 @@
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const socket = ref<any | null>(null)
 
+			const { createSocket } = useSocket()
+
 			onMounted(() => {
 				const token = localStorage.getItem("token")
 				if (!token) return
-				const backUrl = import.meta.env.VITE_APP_BACK_URL as string
-				const socketUrl = backUrl.replace("/api/v1", "")
-				socket.value = io(socketUrl, { transports: ["websocket"] })
+				// Source unique de l'URL socket (cf. §1.7) au lieu de redériver ici.
+				socket.value = createSocket()
 				socket.value.emit("join-user-room", { token })
 				listenToAlerts(socket.value)
 			})

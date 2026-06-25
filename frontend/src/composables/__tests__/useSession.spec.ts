@@ -97,6 +97,35 @@ describe("useSession", () => {
 		})
 	})
 
+	describe("connectionState (reconnexion §1.6)", () => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const findHandler = (event: string) => mockOn.mock.calls.find((c: any[]) => c[0] === event)?.[1]
+
+		it("passe à 'connected' et réémet join-session à la (re)connexion", () => {
+			const { startSessionOnClientSide, connectionState } = useSession()
+			startSessionOnClientSide("my-topic", "sensor1")
+			// Pas encore connecté tant que l'event 'connect' n'a pas été reçu.
+			expect(connectionState.value).toBe("disconnected")
+
+			mockEmit.mockClear()
+			const connectHandler = findHandler("connect")
+			expect(connectHandler).toBeTypeOf("function")
+			connectHandler()
+
+			expect(connectionState.value).toBe("connected")
+			expect(mockEmit).toHaveBeenCalledWith("join-session", expect.objectContaining({ topic: "my-topic" }))
+		})
+
+		it("passe à 'reconnecting' à la déconnexion", () => {
+			const { startSessionOnClientSide, connectionState } = useSession()
+			startSessionOnClientSide("my-topic", "sensor1")
+			const disconnectHandler = findHandler("disconnect")
+			expect(disconnectHandler).toBeTypeOf("function")
+			disconnectHandler()
+			expect(connectionState.value).toBe("reconnecting")
+		})
+	})
+
 	describe("endSession()", () => {
 		it("should reset topic", () => {
 			const { topic, startSessionOnClientSide, endSession } = useSession()
