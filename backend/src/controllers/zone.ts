@@ -5,6 +5,19 @@ const DB: any = db;
 const { Zone, Sensor } = DB;
 // --- End of model(s) import
 import { BadRequestException, NotFoundException } from "@utils/exceptions";
+import { Role, UserPayload } from "#/user";
+import { getSensorsAvailable } from "@controllers/measurement";
+
+/**
+ * Renvoie la liste des IDs de capteurs visibles par l'utilisateur courant.
+ * `null` => admin (aucun filtre, voit tout). Sinon => liste blanche d'IDs
+ * (cohérent avec le filtrage de GET /sensors).
+ */
+const accessibleSensorIds = async (req: Request): Promise<string[] | null> => {
+  const token = req.user as UserPayload;
+  if (token.role === Role.ADMIN) return null;
+  return getSensorsAvailable(token);
+};
 
 interface ZoneRow {
   id: string;
@@ -77,16 +90,26 @@ const getZones = async (_req: Request, res: Response) => {
   }
 };
 
-const getZoneTree = async (_req: Request, res: Response) => {
+const getZoneTree = async (req: Request, res: Response) => {
   try {
     const zones: ZoneRow[] = await Zone.findAll({
       attributes: ["id", "name", "type", "parentId"],
       raw: true,
     });
-    // Compte des capteurs directs par zone.
+    // Compte des capteurs directs par zone, restreint aux capteurs visibles
+    // par l'utilisateur (un non-admin ne doit pas déduire l'existence de
+    // capteurs auxquels il n'a pas accès via le compteur).
+    const allowedIds = await accessibleSensorIds(req);
+    const sensorWhere =
+      allowedIds === null
+        ? { zoneId: { [DB.Sequelize.Op.ne]: null } }
+        : {
+            zoneId: { [DB.Sequelize.Op.ne]: null },
+            id: { [DB.Sequelize.Op.in]: allowedIds },
+          };
     const sensors = await Sensor.findAll({
       attributes: ["zoneId"],
-      where: { zoneId: { [DB.Sequelize.Op.ne]: null } },
+      where: sensorWhere,
       raw: true,
     });
     const counts: Record<string, number> = {};
@@ -103,8 +126,19 @@ const getZoneTree = async (_req: Request, res: Response) => {
 const getZone = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const allowedIds = await accessibleSensorIds(req);
+    // Non-admin : on restreint les capteurs inclus à ceux autorisés (LEFT JOIN
+    // via required:false pour ne pas masquer la zone si aucun capteur visible).
+    const sensorInclude =
+      allowedIds === null
+        ? { model: Sensor }
+        : {
+            model: Sensor,
+            required: false,
+            where: { id: { [DB.Sequelize.Op.in]: allowedIds } },
+          };
     const zone = await Zone.findByPk(id, {
-      include: [{ model: Zone, as: "children" }, { model: Sensor }],
+      include: [{ model: Zone, as: "children" }, sensorInclude],
     });
     if (!zone) {
       throw new NotFoundException("Zone not found", "zone.not.found");
@@ -122,8 +156,15 @@ const getZoneSensors = async (req: Request, res: Response) => {
     if (!zone) {
       throw new NotFoundException("Zone not found", "zone.not.found");
     }
+    const allowedIds = await accessibleSensorIds(req);
+    // Même filtrage d'accès que GET /sensors : un non-admin ne voit que les
+    // capteurs auxquels il a accès, jamais tout le contenu de la zone.
+    const where =
+      allowedIds === null
+        ? { zoneId: id }
+        : { zoneId: id, id: { [DB.Sequelize.Op.in]: allowedIds } };
     const sensors = await Sensor.findAll({
-      where: { zoneId: id },
+      where,
       order: [["name", "ASC"]],
     });
     return res.status(200).json(sensors);
