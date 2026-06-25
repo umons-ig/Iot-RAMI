@@ -35,31 +35,23 @@ La connexion est geree via `POST /users/login` (retourne l'access token JWT + po
 | `POST`   | `/users/login`                              | -      | Connexion, retourne un JWT                       |
 | `POST`   | `/users/signup`                             | -      | Creation de compte                               |
 | `PUT`    | `/users/update`                             | auth   | Mise a jour des informations utilisateur         |
-| `PUT`    | `/users/update/role`                        | auth   | Mise a jour du role                              |
+| `PUT`    | `/users/update/role`                        | admin  | Mise a jour du role d'un utilisateur             |
 | `GET`    | `/users/verify/adminPanel`                  | auth   | Verifie si l'utilisateur a acces au panel admin  |
-| `GET`    | `/users/all`                                | auth   | Liste tous les utilisateurs (roles)              |
-| `GET`    | `/users/:id/sessions`                       | -      | Sessions d'un utilisateur                        |
-| `GET`    | `/users/:id/sessions/on/sensor/:idSensor`   | -      | Sessions d'un utilisateur sur un capteur donne   |
+| `GET`    | `/users/all`                                | auth   | Liste les utilisateurs (roles inferieurs/egaux)  |
+| `GET`    | `/users/:id/sessions`                       | auth   | Sessions d'un utilisateur                        |
+| `GET`    | `/users/:id/sessions/on/sensor/:idSensor`   | auth   | Sessions d'un utilisateur sur un capteur donne   |
 
-### Acces aux capteurs
+### Acces aux capteurs (grain fin, par capteur)
 
 | Methode  | Route                          | Auth   | Description                                      |
 |----------|--------------------------------|--------|--------------------------------------------------|
-| `POST`   | `/users/sensors/access`        | auth   | Donne acces a un capteur a un utilisateur        |
-| `DELETE` | `/users/sensors/access`        | auth   | Retire l'acces a un capteur                      |
+| `POST`   | `/users/sensors/access`        | admin  | Donne acces a un capteur a des utilisateurs      |
+| `DELETE` | `/users/sensors/access`        | admin  | Retire l'acces a un capteur                      |
 | `GET`    | `/users/sensors/access`        | admin  | Liste tous les acces capteurs                    |
 | `POST`   | `/users/sensors/access/ask`    | auth   | Demande d'acces a un capteur existant            |
-| `POST`   | `/users/sensors/creation/ask`  | auth   | Demande de creation d'un nouveau capteur         |
-| `GET`    | `/users/sensors/creation`      | admin  | Liste les demandes de creation en attente        |
-| `POST`   | `/users/sensors/creation`      | admin  | Approuve une demande de creation de capteur      |
 
-### Types de mesures
-
-| Methode  | Route                                   | Auth   | Description                                      |
-|----------|-----------------------------------------|--------|--------------------------------------------------|
-| `POST`   | `/users/measurementTypes/creation/ask`  | auth   | Demande de creation d'un type de mesure          |
-| `GET`    | `/users/measurementTypes/creation`      | admin  | Liste les demandes de types de mesures           |
-| `POST`   | `/users/measurementTypes/creation`      | admin  | Approuve la creation d'un type de mesure         |
+> Pour donner acces a **un ensemble de capteurs d'un coup**, voir l'acces par
+> **zone** (`/zones/:id/access`) et les **equipes** (`/teams`) ci-dessous.
 
 ---
 
@@ -86,6 +78,60 @@ La connexion est geree via `POST /users/login` (retourne l'access token JWT + po
   "topic": "esp32-dht22-topic"
 }
 ```
+
+---
+
+## Zones — `/zones`
+
+Hierarchie de localisation en **arbre recursif** (entreprise > batiment > etage > piece > …). Un capteur est rattache a une zone-feuille (`Sensor.zoneId`). Accorder l'acces a une zone donne acces, **en cascade**, a tous les capteurs de son sous-arbre.
+
+| Methode  | Route                    | Auth  | Description                                                       |
+|----------|--------------------------|-------|------------------------------------------------------------------|
+| `GET`    | `/zones`                 | auth  | Liste plate de toutes les zones (triees par nom)                 |
+| `POST`   | `/zones`                 | admin | Cree une zone (`{ name, type?, parentId? }`)                     |
+| `GET`    | `/zones/tree`            | auth  | Arbre imbrique + compteur de capteurs **visibles** par zone      |
+| `GET`    | `/zones/:id`             | auth  | Une zone avec ses enfants et ses capteurs visibles               |
+| `PUT`    | `/zones/:id`             | admin | Met a jour `{ name?, type?, parentId? }` (anti-cycle au reparentage) |
+| `DELETE` | `/zones/:id`             | admin | Supprime une zone (refus si non vide, sauf `?cascade=true`)      |
+| `GET`    | `/zones/:id/sensors`     | auth  | Capteurs de la zone (filtres par acces de l'utilisateur)         |
+| `PUT`    | `/zones/:id/sensors`     | admin | Rattache un capteur (`{ sensorId }`) ; `:id = none` pour detacher |
+| `GET`    | `/zones/:id/access`      | admin | Users et equipes ayant un acces **direct** a la zone             |
+| `POST`   | `/zones/:id/access`      | admin | Accorde l'acces a la zone (`{ userId }` **ou** `{ teamId }`)     |
+| `DELETE` | `/zones/:id/access`      | admin | Retire l'acces (`{ userId }` **ou** `{ teamId }`)               |
+
+> **Suppression en cascade** : la FK `parentId` est `ON DELETE CASCADE` (supprimer une zone supprime son sous-arbre) ; `Sensor.zoneId` est `ON DELETE SET NULL` (les capteurs deviennent « non classes »).
+
+### Schema zone
+
+```json
+{
+  "id": "uuid",
+  "name": "Batiment A",
+  "type": "building",
+  "parentId": "uuid | null"
+}
+```
+
+---
+
+## Equipes — `/teams`
+
+Groupes d'utilisateurs. Une equipe peut recevoir l'acces a une zone (`/zones/:id/access` avec `teamId`) : tous ses membres voient alors, en cascade, les capteurs du sous-arbre.
+
+| Methode  | Route                          | Auth  | Description                                          |
+|----------|--------------------------------|-------|------------------------------------------------------|
+| `GET`    | `/teams`                       | auth  | Liste toutes les equipes                             |
+| `POST`   | `/teams`                       | admin | Cree une equipe (`{ name }`)                        |
+| `GET`    | `/teams/:id`                   | auth  | Une equipe avec ses membres et ses zones accordees   |
+| `PUT`    | `/teams/:id`                   | admin | Renomme l'equipe (`{ name }`)                       |
+| `DELETE` | `/teams/:id`                   | admin | Supprime l'equipe (cascade sur membres et grants)    |
+| `POST`   | `/teams/:id/members`           | admin | Ajoute un membre (`{ userId }`)                     |
+| `DELETE` | `/teams/:id/members/:userId`   | admin | Retire un membre                                     |
+
+### Modele d'acces effectif
+
+L'ensemble des capteurs visibles par un utilisateur =
+**acces individuels** (`/users/sensors/access`) ∪ **capteurs des zones** accordees a l'utilisateur (`UserZoneAccess`) ∪ **capteurs des zones** accordees a ses equipes (`TeamZoneAccess`), le tout **en cascade** sur les sous-arbres. Les admins voient tout.
 
 ---
 
