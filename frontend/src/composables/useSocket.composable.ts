@@ -13,7 +13,7 @@ const DEFAULT_SOCKET_URL = "http://localhost:3000"
  *
  * `VITE_SOCKET_URL` reste accepté comme override explicite si besoin.
  */
-const SOCKET_OPTIONS = { transports: ["websocket"] } as const
+const SOCKET_OPTIONS = { transports: ["websocket"] }
 
 const useSocket = () => {
 	const getSocketUrl = (): string => {
