@@ -2,8 +2,12 @@ import app from "@/app";
 import superTest from "supertest";
 import jwt from "jsonwebtoken";
 
+// On conserve les vraies classes d'erreur (TokenExpiredError/JsonWebTokenError)
+// pour que les `instanceof` du middleware fonctionnent ; seul verify est mocké.
 jest.mock("jsonwebtoken", () => {
+  const actual = jest.requireActual("jsonwebtoken");
   return {
+    ...actual,
     verify: jest.fn(),
   };
 });
@@ -61,7 +65,7 @@ describe("Auth middleware", () => {
     expect(response.body.message).toBe("Unauthorized !");
     expect(response.body.codeError).toBe("auth.token.invalid");
   });
-  test("It should not pass auth and return 500 (jwt error)", async () => {
+  test("It should not pass auth and return 401 (malformed token)", async () => {
     const verifyMock = jest.fn();
     (verifyMock as jest.Mock).mockImplementationOnce(() => {
       throw new jwt.JsonWebTokenError("invalid token");
@@ -76,8 +80,24 @@ describe("Auth middleware", () => {
       })
       .set("Authorization", "Bearer 123456789");
 
-    expect(response.statusCode).toBe(500);
-    expect(response.body.message).toBe("Server error !");
-    expect(response.body.codeError).toBe("server.error");
+    // Avant : 500 (cf. §0.5). Un token malformé est une erreur d'auth -> 401.
+    expect(response.statusCode).toBe(401);
+    expect(response.body.codeError).toBe("auth.token.invalid");
+  });
+
+  test("It should not pass auth and return 401 (expired token)", async () => {
+    const verifyMock = jest.fn();
+    (verifyMock as jest.Mock).mockImplementationOnce(() => {
+      throw new jwt.TokenExpiredError("jwt expired", new Date());
+    });
+    jwt.verify = verifyMock;
+
+    const response = await superTest(app)
+      .post(baseUri)
+      .send({ name: "test", id: 1 })
+      .set("Authorization", "Bearer 123456789");
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body.codeError).toBe("auth.token.expired");
   });
 });

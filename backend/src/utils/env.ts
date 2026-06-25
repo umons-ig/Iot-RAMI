@@ -22,7 +22,7 @@ const envs = {
   DB_USER: env("DB_USER", "postgres") as string,
   DB_PASSWORD: env("DB_PASSWORD", "postgres") as string,
   JWT_SECRET: env("JWT_SECRET", "secret") as string,
-  JWT_EXPIRATION: env("JWT_EXPIRATION", "1d") as string,
+  JWT_EXPIRATION: env("JWT_EXPIRATION", "15m") as string,
   BCRYPT_SALT_ROUNDS: env("BCRYPT_SALT_ROUNDS", 10, true) as number,
   MAIL_HOST: env("MAIL_HOST", "smtp.gmail.com") as string,
   MAIL_PORT: env("MAIL_PORT", 465, true) as number,
@@ -34,6 +34,18 @@ const envs = {
 };
 
 if (envs.NODE_ENV === "production") {
+  // Garde-fou : en prod, on exige des secrets forts (≥ 32 caractères) et
+  // distincts. Avant, seule la valeur par défaut littérale était refusée, donc
+  // un JWT_SECRET="abc" passait. Cf. PLAN_AMELIORATIONS §0.7.
+  const MIN_SECRET_LENGTH = 32;
+  const assertStrongSecret = (name: string, value: string) => {
+    if (value.length < MIN_SECRET_LENGTH) {
+      throw new Error(
+        `[env] ${name} must be at least ${MIN_SECRET_LENGTH} characters long in production`
+      );
+    }
+  };
+
   if (envs.JWT_SECRET === "secret") {
     throw new Error(
       "[env] JWT_SECRET must be set to a strong value in production"
@@ -42,6 +54,13 @@ if (envs.NODE_ENV === "production") {
   if (envs.REFRESH_TOKEN_SECRET === "refresh_secret") {
     throw new Error(
       "[env] REFRESH_TOKEN_SECRET must be set to a strong value in production"
+    );
+  }
+  assertStrongSecret("JWT_SECRET", envs.JWT_SECRET);
+  assertStrongSecret("REFRESH_TOKEN_SECRET", envs.REFRESH_TOKEN_SECRET);
+  if (envs.JWT_SECRET === envs.REFRESH_TOKEN_SECRET) {
+    throw new Error(
+      "[env] JWT_SECRET and REFRESH_TOKEN_SECRET must be different in production"
     );
   }
 }
