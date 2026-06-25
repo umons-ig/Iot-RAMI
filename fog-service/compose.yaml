@@ -62,7 +62,9 @@ services:
       - MQTT_USERNAME=${MQTT_USERNAME}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
   watchtower:
-    image: containrrr/watchtower:1.7.1
+    # Fork communautaire maintenu (containrrr/watchtower archivé en déc. 2025).
+    # API-compatible : même config, même comportement. Multi-arch (amd64/arm64).
+    image: nickfedor/watchtower:1.18.1
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

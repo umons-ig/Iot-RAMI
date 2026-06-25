@@ -122,7 +122,7 @@ Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le
 | `frontend` | `ghcr.io/gaspardmenou/iot-rami-frontend` (Nginx) | `8080→80` | SPA Vue 3 |
 | `prometheus` | `prom/prometheus` | `9090` | Scraping des métriques |
 | `grafana` | `grafana/grafana` | `3001→3000` | Dashboards |
-| `watchtower` | `containrrr/watchtower` | — | Auto-déploiement (poll GHCR toutes les 300 s) |
+| `watchtower` | `nickfedor/watchtower` | — | Auto-déploiement (poll GHCR toutes les 300 s) — fork maintenu de Watchtower |
 
 > ⚠️ **Mosquitto n'est PAS dans le compose racine** : le broker MQTT vit uniquement sur le fog (voir ci-dessous). Le cloud ne reçoit les données que via Kafka.
 
@@ -133,7 +133,7 @@ Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le
 | `mosquitto` | `eclipse-mosquitto:2.0.20` | `1883` | Broker MQTT local (capteurs ↔ fog) |
 | `fog-service` | `ghcr.io/gaspardmenou/iot-rami-fog` | — | Bridge MQTT → Kafka + buffer |
 | `fog-postgres` | `postgres:16-alpine` | — | Store-and-forward persistant (outbox) si le cloud est injoignable |
-| `watchtower` | `containrrr/watchtower:1.7.1` | — | Auto-déploiement de l'image fog |
+| `watchtower` | `nickfedor/watchtower:1.18.1` | — | Auto-déploiement de l'image fog (fork maintenu) |
 
 ### Volumes & persistance
 

@@ -151,7 +151,9 @@
         - rami-network
 
     watchtower:
-      image: containrrr/watchtower:1.7.1
+      # Fork communautaire maintenu (containrrr/watchtower archivé en déc. 2025).
+      # API-compatible : même config, même comportement.
+      image: nickfedor/watchtower:1.18.1
       container_name: iot-rami-watchtower
       restart: always
       volumes:
