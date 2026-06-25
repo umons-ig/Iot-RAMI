@@ -172,19 +172,19 @@ describe("generateUserResponse", () => {
     expect(mockRes.cookie).not.toHaveBeenCalled();
   });
 
-  test("should correctly calculate token expiration time", () => {
+  test("should derive expiresAt from the token's exp claim (single source of truth)", () => {
+    // L'expiration provient désormais du claim `exp` du JWT (en secondes),
+    // plus d'une constante codée en dur. Cf. PLAN_AMELIORATIONS §0.6.
+    const expSeconds = Math.floor(Date.now() / 1000) + 15 * 60;
+    (jwt.decode as jest.Mock).mockReturnValueOnce({ exp: expSeconds });
+
     const response = generateUserResponse(
       mockUserOfUserType,
       mockRes,
       mockToken
     );
 
-    const expectedExpiration = Date.now() + 12 * 60 * 60 * 1000;
-
-    expect(response.expiresAt).toBeGreaterThanOrEqual(
-      expectedExpiration - 1000
-    );
-    expect(response.expiresAt).toBeLessThanOrEqual(expectedExpiration + 1000);
+    expect(response.expiresAt).toBe(expSeconds * 1000);
   });
 });
 

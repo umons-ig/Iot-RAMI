@@ -124,6 +124,15 @@ const generateUserResponse = (
     });
   }
 
+  // Source de vérité unique de l'expiration : le claim `exp` du token lui-même
+  // (en secondes). Avant, expiresAt était codé en dur (12h au login / 15min au
+  // refresh) sans rapport avec l'expiration réelle du JWT, ce qui désynchronisait
+  // le front. Cf. PLAN_AMELIORATIONS §0.6.
+  const decodedAccess = jwt.decode(token) as { exp?: number } | null;
+  const expiresAt = decodedAccess?.exp
+    ? decodedAccess.exp * 1000
+    : Date.now() + 15 * 60 * 1000;
+
   return {
     id: user.id,
     email: user.email,
@@ -132,7 +141,7 @@ const generateUserResponse = (
     dateOfBirth: user.dateOfBirth,
     sex: user.sex,
     role: user.role,
-    expiresAt: Date.now() + 12 * 60 * 60 * 1000,
+    expiresAt,
     token,
   };
 };
@@ -670,9 +679,13 @@ const refresh = async (req: Request, res: Response) => {
       sameSite: "strict",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
+    // Même source de vérité qu'au login : l'exp réel du token (cf. §0.6).
+    const decodedNew = jwt.decode(newToken) as { exp?: number } | null;
     return res.status(200).json({
       token: newToken,
-      expiresAt: Date.now() + 15 * 60 * 1000,
+      expiresAt: decodedNew?.exp
+        ? decodedNew.exp * 1000
+        : Date.now() + 15 * 60 * 1000,
     });
   } catch (error) {
     return res
