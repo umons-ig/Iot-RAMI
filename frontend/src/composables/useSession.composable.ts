@@ -3,7 +3,7 @@ import { useAxios } from "@/composables/useAxios.composable"
 import { useSocket } from "@/composables/useSocket.composable"
 import type { Session } from "#/session"
 import { UserFields, EventTypes, handleEvent } from "@/composables/useUser.composable"
-import type { ChartData, ChartDataset } from "chart.js"
+import type { ChartData } from "chart.js"
 
 enum SessionControllerPaths {
 	START_SESSION_ON_CLIENT_SIDE = "sessions/new",
@@ -311,29 +311,38 @@ const useSession = () => {
 	]
 
 	const updateChart = (label: Date, value: number, measureType: string, maxpoint = 100) => {
-		const datasets = [...chartData.value.datasets] as ChartDataset<"line", { x: Date; y: number }[]>[]
-		const newLabels = [...(chartData.value.labels || []), label.toISOString()] as string[]
+		// Mutation IN-PLACE (cf. PLAN_AMELIORATIONS §2.1). L'ancienne version
+		// recopiait tous les labels + tous les datasets ET re-triait tout le
+		// tableau À CHAQUE point (O(n log n) pour rien, les points arrivent déjà
+		// chronologiques) — soit ~400 copies+tris/s à 100 Hz × 4 mesures. Ici on
+		// push en place et on ne réassigne que le wrapper de premier niveau (O(1))
+		// pour déclencher la mise à jour de vue-chartjs sans recopier les tableaux.
+		const data = chartData.value as ChartData<"line", { x: Date; y: number }[]>
+		if (!data.labels) data.labels = []
+		const labels = data.labels as string[]
+		labels.push(label.toISOString())
 
-		let datasetIndex = datasets.findIndex(d => d.label === measureType)
-		if (datasetIndex === -1) {
-			const color = DATASET_COLORS[datasets.length % DATASET_COLORS.length]
-			datasets.push({
+		let dataset = data.datasets.find(d => d.label === measureType)
+		if (!dataset) {
+			const color = DATASET_COLORS[data.datasets.length % DATASET_COLORS.length]
+			dataset = {
 				label: measureType,
 				backgroundColor: color.bg,
 				borderColor: color.border,
 				fill: false,
 				data: [],
-			})
-			datasetIndex = datasets.length - 1
+			}
+			data.datasets.push(dataset)
 		}
 
-		const newData = [...datasets[datasetIndex].data, { x: label, y: value }]
-		newData.sort((a, b) => a.x.getTime() - b.x.getTime())
-		if (maxpoint > 0 && newData.length > maxpoint) newData.shift()
-		if (maxpoint > 0 && newLabels.length > maxpoint) newLabels.shift()
+		dataset.data.push({ x: label, y: value })
+		// Plus de tri : les mesures arrivent déjà dans l'ordre temporel.
+		if (maxpoint > 0 && dataset.data.length > maxpoint) dataset.data.shift()
+		if (maxpoint > 0 && labels.length > maxpoint) labels.shift()
 
-		datasets[datasetIndex] = { ...datasets[datasetIndex], data: newData }
-		chartData.value = { labels: newLabels, datasets }
+		// Réassigne uniquement le conteneur (mêmes références de tableaux) ->
+		// vue-chartjs détecte le changement et appelle chart.update() sans copie.
+		chartData.value = { labels, datasets: data.datasets }
 	}
 
 	const fetchDataAndUpdateChart = async (idSession: string) => {
