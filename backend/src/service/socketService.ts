@@ -172,6 +172,16 @@ class SocketService {
   > = new Map();
   private THRESHOLD_TTL = 2 * 60 * 1000; // 2 minutes
 
+  // Destinataires d'alerte mis en cache par capteur (TTL) pour éviter 2 requêtes
+  // DB par mesure en violation (N+1). Cf. PLAN_AMELIORATIONS §2.9.
+  private recipientsCache: Map<string, { ids: string[]; loadedAt: number }> =
+    new Map();
+  private RECIPIENTS_TTL = 2 * 60 * 1000; // 2 minutes
+
+  // État d'alerte courant par (capteur:typeMesure) pour l'anti-flapping :
+  // on n'émet qu'au CHANGEMENT d'état, pas à chaque point hors bornes. §2.9
+  private alertState: Map<string, "min" | "max" | "ok"> = new Map();
+
   private async getMeasurementTypesMap(): Promise<void> {
     const now = new Date();
     if (
@@ -365,33 +375,60 @@ class SocketService {
     ) {
       violations.push({ direction: "max", limit: threshold.maxValue });
     }
-    if (violations.length === 0) return;
+    // Anti-flapping : on ne notifie qu'au CHANGEMENT d'état (entrée en
+    // violation ou bascule min<->max), pas à chaque point hors bornes. Un
+    // capteur durablement hors limites n'émet donc qu'une alerte, pas une par
+    // mesure. L'état est mis à jour même au retour dans les bornes pour
+    // permettre une nouvelle alerte ultérieure. §2.9
+    const newState: "min" | "max" | "ok" = violations.some(
+      (v) => v.direction === "min"
+    )
+      ? "min"
+      : violations.some((v) => v.direction === "max")
+      ? "max"
+      : "ok";
+    const key = `${idSensor}:${idMeasurementType}`;
+    const prevState = this.alertState.get(key) ?? "ok";
+    if (newState === prevState) return;
+    this.alertState.set(key, newState);
+    if (newState === "ok") return; // retour dans les bornes : juste un reset
 
+    const recipients = await this.getAlertRecipients(idSensor);
+    for (const userId of recipients) {
+      this.io.to(`user-${userId}`).emit("threshold-alert", {
+        sensorTopic,
+        measureType,
+        value,
+        minValue: threshold.minValue,
+        maxValue: threshold.maxValue,
+        direction: newState,
+        triggeredAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  // Destinataires d'une alerte capteur (accès direct ∪ admins), mis en cache
+  // par capteur avec TTL pour éviter le N+1. §2.9
+  private async getAlertRecipients(idSensor: string): Promise<string[]> {
+    const cached = this.recipientsCache.get(idSensor);
+    if (cached && Date.now() - cached.loadedAt < this.RECIPIENTS_TTL) {
+      return cached.ids;
+    }
     const [accesses, admins] = await Promise.all([
       UserSensorAccess.findAll({
         where: { sensorId: idSensor, status: "accepted" },
       }),
       User.findAll({ where: { role: "admin" }, attributes: ["id"] }),
     ]);
-    const accessUserIds = new Set<string>(
+    const ids = new Set<string>(
       accesses.map((a: any) => (a.dataValues as any).userId)
     );
     for (const admin of admins) {
-      accessUserIds.add((admin.dataValues as any).id);
+      ids.add((admin.dataValues as any).id);
     }
-    for (const violation of violations) {
-      for (const userId of accessUserIds) {
-        this.io.to(`user-${userId}`).emit("threshold-alert", {
-          sensorTopic,
-          measureType,
-          value,
-          minValue: threshold.minValue,
-          maxValue: threshold.maxValue,
-          direction: violation.direction,
-          triggeredAt: new Date().toISOString(),
-        });
-      }
-    }
+    const arr = Array.from(ids);
+    this.recipientsCache.set(idSensor, { ids: arr, loadedAt: Date.now() });
+    return arr;
   }
 
   private async handleSessionStop(data: KafkaStopPayload): Promise<void> {

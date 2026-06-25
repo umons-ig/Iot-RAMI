@@ -482,6 +482,48 @@ describe("SocketService", () => {
       );
     });
 
+    it("n'émet qu'une fois tant que l'état d'alerte ne change pas (anti-flapping §2.9)", async () => {
+      (db as any).Threshold.findAll = jest.fn().mockResolvedValue([
+        {
+          dataValues: {
+            idSensor: sensorId,
+            idMeasurementType: measurementTypeId,
+            minValue: 20,
+            maxValue: 100,
+          },
+        },
+      ]);
+      (db as any).UserSensorAccess.findAll = jest
+        .fn()
+        .mockResolvedValue([{ dataValues: { userId: "user-uuid-1" } }]);
+      (db as any).User.findAll = jest.fn().mockResolvedValue([]);
+
+      // 3 points consécutifs sous le min -> une seule émission.
+      await (service as any).checkAndEmitAlerts(
+        sensorId,
+        measurementTypeId,
+        measureType,
+        10,
+        sensorTopic
+      );
+      await (service as any).checkAndEmitAlerts(
+        sensorId,
+        measurementTypeId,
+        measureType,
+        9,
+        sensorTopic
+      );
+      await (service as any).checkAndEmitAlerts(
+        sensorId,
+        measurementTypeId,
+        measureType,
+        8,
+        sensorTopic
+      );
+
+      expect(emitMock).toHaveBeenCalledTimes(1);
+    });
+
     it("ne émet aucune alerte si la valeur est dans les limites", async () => {
       (db as any).Threshold.findAll = jest.fn().mockResolvedValue([
         {
