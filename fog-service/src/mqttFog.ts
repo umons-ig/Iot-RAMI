@@ -39,6 +39,9 @@ class MqttFog {
   private kafkaService!: KafkaService;
   private outbox!: Outbox;
   private buffer = new Map<string, any[]>();
+  // Topics /sensor des ESP vus au moins une fois (≠ Zigbee). Sert au web server
+  // de gestion à pousser des commandes (ota/set_wifi/set_mqtt/restart). §gestion
+  private knownDevices = new Set<string>();
   private flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   private flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   private maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -278,6 +281,31 @@ class MqttFog {
       JSON.stringify({ [MESSAGE_FIELDS.ANS]: COMMANDS.ACK }),
     );
   }
+
+  // ─── Gestion à distance des ESP (utilisée par le web server) ───────────────
+  /** Liste des topics /sensor des ESP vus (pour piloter/cibler les commandes). */
+  public getKnownDevices(): string[] {
+    return [...this.knownDevices];
+  }
+
+  /** Publie une commande de gestion vers le topic /server d'un ESP. */
+  public publishDeviceCommand(
+    sensorTopic: string,
+    payload: Record<string, unknown>,
+  ): void {
+    const serverTopic = sensorTopic.replace(TOPICS.SENSOR, TOPICS.SERVER);
+    this.mqttClient.publish(serverTopic, JSON.stringify(payload));
+  }
+
+  /** Diffuse une commande à TOUS les ESP connus. Renvoie le nombre de cibles. */
+  public broadcastDeviceCommand(payload: Record<string, unknown>): number {
+    let count = 0;
+    for (const topic of this.knownDevices) {
+      this.publishDeviceCommand(topic, payload);
+      count++;
+    }
+    return count;
+  }
   private handleMeasurement(topic: string, data: any): void {
     if (!this.buffer.has(topic)) {
       console.warn(`⚠️ [handleMeasurement] Mesures reçues sans session active pour: ${topic} — ignorées`);
@@ -439,6 +467,8 @@ class MqttFog {
       if (!topic.endsWith(TOPICS.SENSOR)) {
         return;
       }
+      // Mémorise l'ESP pour le web server de gestion (ESP only, ≠ Zigbee).
+      this.knownDevices.add(topic);
 
       const parsed = JSON.parse(message.toString());
       if (parsed[MESSAGE_FIELDS.CMD] === COMMANDS.PING) {

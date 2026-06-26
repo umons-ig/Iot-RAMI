@@ -1,21 +1,21 @@
-#include "Sensor.hpp"
+#ifdef ENABLE_DHT22
+
+#include "Dht22Driver.hpp"
 #include <Arduino.h>
 #include <DHT.h>
 
-#define DHTTYPE DHT22
-#define DHTPIN 27
+#define DHT22_TYPE DHT22
+static DHT dht(DHT22_PIN, DHT22_TYPE);
 
-static DHT dht(DHTPIN, DHTTYPE);
-
-void Dht22Sensor::begin() {
+void Dht22Driver::begin() {
   dht.begin();
 }
 
-int Dht22Sensor::read(SensorMeasure* out, int maxOut) {
+int Dht22Driver::read(SensorMeasure* out, int maxOut) {
   float humidity = dht.readHumidity();
   float temperature = dht.readTemperature();
   if (isnan(humidity) || isnan(temperature)) {
-    Serial.println("Failed to read from DHT sensor!");
+    Serial.println("[DHT22] lecture echouee");
     return 0;
   }
   int n = 0;
@@ -23,3 +23,5 @@ int Dht22Sensor::read(SensorMeasure* out, int maxOut) {
   if (n < maxOut) out[n++] = {"humidity", humidity};
   return n;
 }
+
+#endif // ENABLE_DHT22
