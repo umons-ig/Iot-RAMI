@@ -77,6 +77,27 @@ demandés avec leurs pins. **Aucune recompilation pour changer de pins/capteur.*
 Même socle dans les deux cas. Viser **A** par défaut (déploiement « un firmware
 pour tout le parc »), garder **B** comme option pour les cibles contraintes.
 
+#### Taille flash / partitions (le binaire universel rentre-t-il ?)
+Préoccupation légitime sur ESP32 (souvent **4 Mo**). En pratique :
+- L'essentiel du poids (stack WiFi, mbedTLS, core Arduino, ArduinoJson) est
+  **partagé** : une app capteur-unique pèse déjà ~1 Mo. Les **drivers** sont
+  petits (~dizaines de Ko chacun) → une dizaine ajoute **~100-300 Ko**. Binaire
+  universel ≈ **1,2-1,4 Mo**.
+- **Schéma de partition** : `huge_app` (3 Mo app, sans OTA) → large ; `min_spiffs`
+  (1,9 Mo/slot, **avec OTA**) → passe aussi. À fixer dans `platformio.ini`
+  (`board_build.partitions`).
+
+**Garde-fous** :
+1. **Variante B (slim au build)** : si ça ne rentre pas (ou pour de l'OTA
+   confortable sur 4 Mo), compiler uniquement les drivers choisis
+   (`build_src_filter`/`-D ENABLE_<DRIVER>`).
+2. **Modules 8/16 Mo** (ex. WROVER 16 Mo) pour le binaire universel + OTA.
+3. **Mesurer** la taille (`pio run` affiche le % flash) à chaque driver ajouté ;
+   CI peut alerter si on dépasse un seuil.
+
+Décision : **A + `huge_app`** par défaut, bascule en **B** pour les cibles
+contraintes — les deux partagent 100 % du socle.
+
 ## 3. Acquisition haute fréquence (ECG) — tâche FreeRTOS
 
 Pour l'ECG (250-500 Hz), l'acquisition ne doit pas partager `loop()` avec le
