@@ -2,8 +2,22 @@ import {
   buildCommandPayload,
   handleCommand,
   buildStatus,
+  checkToken,
   DeviceCommandProvider,
 } from "../managementServer";
+
+describe("checkToken", () => {
+  it("pas de token configuré -> autorisé", () => {
+    expect(checkToken(undefined, "")).toBe(true);
+    expect(checkToken("nimporte", "")).toBe(true);
+  });
+  it("token configuré -> exige une correspondance exacte", () => {
+    expect(checkToken("secret", "secret")).toBe(true);
+    expect(checkToken("mauvais", "secret")).toBe(false);
+    expect(checkToken(undefined, "secret")).toBe(false);
+    expect(checkToken("secre", "secret")).toBe(false); // longueur différente
+  });
+});
 
 describe("buildStatus", () => {
   it("agrège le snapshot + devices + uptime et calcule healthy", () => {
@@ -32,12 +46,17 @@ describe("buildStatus", () => {
 });
 
 describe("buildCommandPayload", () => {
-  it("ota: nécessite une url", () => {
+  it("ota: nécessite une url http(s) valide", () => {
     expect(buildCommandPayload("ota", { url: "http://f/u.bin" })).toEqual({
       cmd: "ota",
       url: "http://f/u.bin",
     });
+    expect(buildCommandPayload("ota", { url: "https://f/u.bin" })).toMatchObject({ cmd: "ota" });
     expect(buildCommandPayload("ota", {})).toBeNull();
+    // Schémas non http(s) rejetés.
+    expect(buildCommandPayload("ota", { url: "file:///etc/passwd" })).toBeNull();
+    expect(buildCommandPayload("ota", { url: "ftp://x/y.bin" })).toBeNull();
+    expect(buildCommandPayload("ota", { url: "javascript:alert(1)" })).toBeNull();
   });
 
   it("set_wifi: nécessite un ssid, pass optionnel", () => {

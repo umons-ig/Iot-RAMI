@@ -10,6 +10,20 @@
  * Les commandes sont exécutées côté ESP par le SensorRunner (cf. firmware).
  */
 import http from "http";
+import { timingSafeEqual } from "crypto";
+
+/**
+ * Vérifie le token de gestion (header X-Mgmt-Token), en temps constant.
+ * Si aucun token n'est configuré -> pas d'auth (le serveur est alors bindé
+ * localhost). Logique pure, testable.
+ */
+export function checkToken(provided: string | undefined, expected: string): boolean {
+  if (!expected) return true;
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export interface FogMetricsSnapshot {
   outboxPending: number;
@@ -61,8 +75,12 @@ export function buildCommandPayload(
 ): Record<string, unknown> | null {
   if (!ALLOWED_COMMANDS.has(cmd)) return null;
   switch (cmd) {
-    case "ota":
-      return params.url ? { cmd, url: String(params.url) } : null;
+    case "ota": {
+      // Valide le schéma : seules des URLs http(s) (pas de file://, data:, etc.).
+      const url = params.url ? String(params.url) : "";
+      if (!/^https?:\/\//i.test(url)) return null;
+      return { cmd, url };
+    }
     case "set_wifi":
       return params.ssid
         ? { cmd, ssid: String(params.ssid), pass: String(params.pass ?? "") }
@@ -148,9 +166,18 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 export function createManagementServer(
   fog: DeviceCommandProvider,
   port: number,
+  token = "",
+  host = "127.0.0.1",
 ): http.Server {
   const server = http.createServer((req, res) => {
     const url = req.url ?? "/";
+    // Auth sur toutes les routes /api/* si un token est configuré.
+    if (url.startsWith("/api/") &&
+        !checkToken(req.headers["x-mgmt-token"] as string | undefined, token)) {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "non autorisé (X-Mgmt-Token)" }));
+      return;
+    }
     if (req.method === "GET" && url === "/api/devices") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ devices: fog.getKnownDevices() }));
@@ -203,8 +230,13 @@ export function createManagementServer(
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "not found" }));
   });
-  server.listen(port, () => {
-    console.log(`🛠️  [management] web server de gestion sur :${port}`);
+  server.listen(port, host, () => {
+    console.log(`🛠️  [management] web server de gestion sur ${host}:${port}`);
+    if (!token && host !== "127.0.0.1" && host !== "localhost") {
+      console.warn(
+        "⚠️  [management] EXPOSÉ sans MGMT_TOKEN — définis un token, l'API pilote OTA/WiFi/restart de la flotte.",
+      );
+    }
   });
   return server;
 }
