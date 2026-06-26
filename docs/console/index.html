@@ -129,7 +129,7 @@
       // Rôles de pins par capteur GPIO (les I²C/UART n'en ont pas ici).
       const PIN_ROLES = { dht22:["data"], ad8232:["out","lo_plus","lo_minus"], hcsr04:["trig","echo"], gsr:["pin"], pir:["pin"], contact:["pin"] };
       const $ = (id) => document.getElementById(id);
-      let port, writer, reader, liveTimer = null, rxBuffer = "", currentPins = {};
+      let port, writer, reader, liveTimer = null, rxBuffer = "", currentPins = {}, gotInfo = false;
 
       // UI capteurs (cases à cocher)
       $("sensorList").innerHTML = SENSORS.map(s =>
@@ -171,6 +171,7 @@
         try { msg = JSON.parse(line); } catch { return; } // logs non-JSON : affichés mais ignorés
         if (!msg.resp) return;
         if (msg.resp === "info") {
+          gotInfo = true;
           $("deviceinfo").innerHTML =
             `nom : <b style="color:var(--phosphor)">${msg.name||"?"}</b><br>` +
             `capteurs : <b>${msg.sensors||"(aucun)"}</b><br>` +
@@ -221,8 +222,11 @@
           setConnected(true);
           log("✅ port ouvert (115200) — reset ESP, attente du boot…");
           readLoop();
-          // Laisse le temps au firmware de booter (WiFi/sensors) avant info.
-          setTimeout(() => send({ cmd: "info" }), 2500);
+          // Le firmware met 1-3 s à booter : on (re)demande l'info plusieurs fois
+          // jusqu'à obtenir une réponse.
+          gotInfo = false;
+          [2500, 4500, 7000, 10000].forEach((t) =>
+            setTimeout(() => { if (!gotInfo) send({ cmd: "info" }); }, t));
         } catch (e) { log("⚠️ connexion: " + e.message); }
       };
 
