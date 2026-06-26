@@ -166,10 +166,10 @@
       function handleLine(line) {
         line = line.trim();
         if (!line) return;
+        log("← " + line); // log TOUT (y compris logs debug) pour visibilité
         let msg;
-        try { msg = JSON.parse(line); } catch { return; } // ignore logs non-JSON
+        try { msg = JSON.parse(line); } catch { return; } // logs non-JSON : affichés mais ignorés
         if (!msg.resp) return;
-        log("← " + line);
         if (msg.resp === "info") {
           $("deviceinfo").innerHTML =
             `nom : <b style="color:var(--phosphor)">${msg.name||"?"}</b><br>` +
@@ -208,12 +208,21 @@
         try {
           port = await navigator.serial.requestPort();
           await port.open({ baudRate: 115200 });
+          // Reset l'ESP pour démarrer sur l'APP (pas le bootloader) : RTS=EN,
+          // DTR=IO0. Pulse de reset avec IO0 haut. (Sinon l'ouverture du port
+          // peut laisser la puce en bootloader -> aucune sortie.)
+          try {
+            await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+            await new Promise(r => setTimeout(r, 150));
+            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+          } catch (e) { log("(setSignals non supporté : " + e.message + ")"); }
           writer = port.writable.getWriter();
           reader = port.readable.getReader();
           setConnected(true);
-          log("✅ port ouvert (115200)");
+          log("✅ port ouvert (115200) — reset ESP, attente du boot…");
           readLoop();
-          setTimeout(() => send({ cmd: "info" }), 400);
+          // Laisse le temps au firmware de booter (WiFi/sensors) avant info.
+          setTimeout(() => send({ cmd: "info" }), 2500);
         } catch (e) { log("⚠️ connexion: " + e.message); }
       };
 
