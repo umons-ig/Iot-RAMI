@@ -56,7 +56,9 @@ const int MQTT_PORT = 1883;
 
 
 /****** Settings; PROGREM would be useless here *******/
-const unsigned int NUMBER_OF_VALUES_PER_SECOND = 100;
+// DHT22 : ~1 lecture/s max de façon fiable (le capteur ne supporte pas 100 Hz —
+// l'ancien main lisait d'ailleurs en dur à 1 Hz). INTERVAL = 1000 ms.
+const unsigned int NUMBER_OF_VALUES_PER_SECOND = 1;
 const long INTERVAL = (1.0 / NUMBER_OF_VALUES_PER_SECOND) * 1000; // Note the use of 1.0 to ensure float division (and interval is in milliseconds)
 unsigned long previousMillis = 0;
 bool allow_to_publish = false;

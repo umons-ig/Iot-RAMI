@@ -1,19 +1,25 @@
 #include "Sensor.hpp"
-#include "MQTTCommonOperations.hpp"
+#include <Arduino.h>
+#include <DHT.h>
 
-DHT dht(DHTPIN, DHTTYPE);
+#define DHTTYPE DHT22
+#define DHTPIN 27
 
-void setupSensor() {
-    dht.begin();
+static DHT dht(DHTPIN, DHTTYPE);
+
+void Dht22Sensor::begin() {
+  dht.begin();
 }
-void readAndPublishMeasures(PubSubClient& client, const char* topic) {
-    float humidity = dht.readHumidity();
-    float temperature = dht.readTemperature();
-    if (isnan(humidity) || isnan(temperature)) {
-        Serial.println("Failed to read from DHT sensor!");
-        return;
-    }
-    const char* types[] = {"temperature", "humidity"};
-    const float values[] = {temperature, humidity};
-    publishMeasures(client, topic, types, values, 2);
+
+int Dht22Sensor::read(SensorMeasure* out, int maxOut) {
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature();
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return 0;
+  }
+  int n = 0;
+  if (n < maxOut) out[n++] = {"temperature", temperature};
+  if (n < maxOut) out[n++] = {"humidity", humidity};
+  return n;
 }
