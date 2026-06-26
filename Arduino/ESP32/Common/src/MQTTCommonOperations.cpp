@@ -214,6 +214,12 @@ void saveWifiCreds(const String& ssid, const String& pass) {
     WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
+void saveSensors(const String& csv) {
+    preference.begin("fog", false);
+    preference.putString("sensors", csv);
+    preference.end();
+}
+
 static unsigned long previousReconnectMillis = 0;
 
 void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt_password, const char* topic) {

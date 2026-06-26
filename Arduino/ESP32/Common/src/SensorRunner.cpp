@@ -74,6 +74,7 @@ void SensorRunner::onMqttMessage(char* topic, uint8_t* payload,
 }
 
 void SensorRunner::loop() {
+  handleSerialConsole();  // config/tests via USB (Web Serial)
   if (!client.connected()) {
     reconnect(client, saved_username, saved_password, saved_topic_server);
     if (client.connected()) {
@@ -116,5 +117,71 @@ void SensorRunner::loop() {
         publishMeasures(client, saved_topic_sensor, types, values, n);
       }
     }
+  }
+}
+
+// ─── Console série USB (Web Serial) ──────────────────────────────────────────
+// Lit des lignes JSON sur Serial et y répond en JSON. Les lignes non-JSON (logs
+// de debug) sont ignorées par la page web côté parseur.
+void SensorRunner::handleSerialConsole() {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\n') {
+      processSerialLine(serialLine);
+      serialLine = "";
+    } else if (c != '\r') {
+      serialLine += c;
+      if (serialLine.length() > 400) serialLine = ""; // garde-fou
+    }
+  }
+}
+
+void SensorRunner::processSerialLine(const String& line) {
+  if (line.length() == 0) return;
+  DynamicJsonDocument doc(384);
+  if (deserializeJson(doc, line)) return; // pas du JSON -> ignoré
+  const String cmd = doc["cmd"] | "";
+  if (cmd.length() == 0) return;
+
+  if (cmd == "info") {
+    DynamicJsonDocument r(256);
+    r["resp"] = "info";
+    r["name"] = saved_name;
+    r["sensors"] = saved_sensors;
+    r["ip"] = WiFi.localIP().toString();
+    r["connected"] = (WiFi.status() == WL_CONNECTED);
+    serializeJson(r, Serial);
+    Serial.println();
+  } else if (cmd == "set_wifi") {
+    saveWifiCreds(String((const char*)(doc["ssid"] | "")),
+                  String((const char*)(doc["pass"] | "")));
+    Serial.println("{\"resp\":\"set_wifi\",\"ok\":true}");
+  } else if (cmd == "set_mqtt") {
+    saveMqttCreds(String((const char*)(doc["broker"] | "")),
+                  String((const char*)(doc["user"] | "")),
+                  String((const char*)(doc["pass"] | "")));
+    Serial.println("{\"resp\":\"set_mqtt\",\"ok\":true}");
+  } else if (cmd == "set_sensors") {
+    saveSensors(String((const char*)(doc["sensors"] | "")));
+    Serial.println("{\"resp\":\"set_sensors\",\"ok\":true}");
+  } else if (cmd == "read") {
+    // Lecture LIVE des capteurs actifs (test depuis la page web).
+    sensor.poll();
+    SensorMeasure measures[MAX_MEASURES];
+    const int n = sensor.read(measures, MAX_MEASURES);
+    DynamicJsonDocument r(512);
+    r["resp"] = "read";
+    JsonArray arr = r.createNestedArray("measures");
+    for (int i = 0; i < n; i++) {
+      JsonObject o = arr.createNestedObject();
+      o["type"] = measures[i].type;
+      o["value"] = measures[i].value;
+    }
+    serializeJson(r, Serial);
+    Serial.println();
+  } else if (cmd == "restart") {
+    Serial.println("{\"resp\":\"restart\",\"ok\":true}");
+    delay(100);
+    ESP.restart();
   }
 }

@@ -75,6 +75,8 @@ void performOta(const String& url);
 void saveMqttCreds(const String& broker, const String& user, const String& pass);
 // Mémorise de nouveaux identifiants WiFi (l'ESP les réutilise au prochain boot).
 void saveWifiCreds(const String& ssid, const String& pass);
+// Persiste la liste CSV des capteurs sélectionnés (NVS). Prise en compte au reboot.
+void saveSensors(const String& csv);
 // Mqtt (connexion, command reception and message publication)
 void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt_password, const char* topic);
 void publishJSONMessage(PubSubClient& client, const char* topic, const char* json_buffer, const bool& retained=true);
