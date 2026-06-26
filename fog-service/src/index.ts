@@ -4,11 +4,15 @@ dotenv.config();
 
 import MqttFog from "./mqttFog";
 import { startMetricsServer } from "./metricsServer";
-import { METRICS_CONFIG } from "./constants";
+import { createManagementServer } from "./managementServer";
+import { FirmwareUpdater } from "./firmwareUpdater";
+import { METRICS_CONFIG, MANAGEMENT_CONFIG, FIRMWARE_CONFIG } from "./constants";
 import type { Server } from "http";
 
 let isShuttingDown = false;
 let metricsServer: Server | undefined;
+let managementServer: Server | undefined;
+let firmwareUpdater: FirmwareUpdater | undefined;
 
 async function shutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
@@ -16,6 +20,8 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`[FogService] Signal ${signal} reçu — arrêt propre...`);
   try {
     metricsServer?.close();
+    managementServer?.close();
+    firmwareUpdater?.stop();
     const fog = await MqttFog.getInstance();
     await fog.shutdown();
   } catch (error) {
@@ -39,6 +45,22 @@ async function main() {
   metricsServer = startMetricsServer(METRICS_CONFIG.port, () =>
     fog.getMetricsSnapshot()
   );
+  // Web server de gestion des ESP (liste + commandes à distance).
+  managementServer = createManagementServer(fog, MANAGEMENT_CONFIG.port);
+  // « Watchtower firmware » : poll GitHub Releases → OTA des ESP (opt-in).
+  if (FIRMWARE_CONFIG.enabled) {
+    firmwareUpdater = new FirmwareUpdater({
+      repo: FIRMWARE_CONFIG.repo,
+      envName: FIRMWARE_CONFIG.env,
+      currentVersion: FIRMWARE_CONFIG.currentVersion,
+      intervalMs: FIRMWARE_CONFIG.pollIntervalMs,
+      onUpdateAvailable: (version, url) => {
+        const sent = fog.broadcastDeviceCommand({ cmd: "ota", url });
+        console.log(`⬆️ [FogService] OTA ${version} diffusée à ${sent} ESP`);
+      },
+    });
+    firmwareUpdater.start();
+  }
   console.log("✅ [FogService] Service démarré");
 }
 
