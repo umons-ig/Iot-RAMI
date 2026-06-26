@@ -231,6 +231,19 @@ void saveSensors(const String& csv) {
     preference.begin("fog", false);
     preference.putString("sensors", csv);
     preference.end();
+    // Met aussi à jour la valeur en mémoire -> 'info' la reflète tout de suite
+    // (l'activation réelle des capteurs se fait au reboot).
+    strncpy(saved_sensors, csv.c_str(), sizeof(saved_sensors) - 1);
+    saved_sensors[sizeof(saved_sensors) - 1] = '\0';
+}
+
+void saveDeviceName(const String& name) {
+    if (name.length() == 0) return;
+    preference.begin("fog", false);
+    preference.putString("sensor_name", name);
+    preference.end();
+    strncpy(saved_name, name.c_str(), sizeof(saved_name) - 1);
+    saved_name[sizeof(saved_name) - 1] = '\0';
 }
 
 static unsigned long previousReconnectMillis = 0;

@@ -76,8 +76,13 @@
 
       <div class="card">
         <h2>Appareil</h2>
-        <div class="row"><button id="info" disabled>Rafraîchir l'info</button></div>
-        <div id="deviceinfo" class="hint">—</div>
+        <label>Nom du capteur (définit le topic MQTT <code>&lt;nom&gt;-topic/sensor</code>)</label>
+        <input id="dname" type="text" placeholder="ex. esp32-salle1" />
+        <div class="row">
+          <button id="applyName" disabled>Appliquer le nom</button>
+          <button id="info" disabled>Rafraîchir l'info</button>
+        </div>
+        <div id="deviceinfo" class="hint" style="margin-top:.6rem">—</div>
       </div>
 
       <div class="card">
@@ -153,7 +158,7 @@
       function setConnected(on) {
         $("status").textContent = on ? "connecté" : "déconnecté";
         $("status").className = "status " + (on ? "ok" : "ko");
-        ["disconnect","info","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart"].forEach(id => $(id).disabled = !on);
+        ["disconnect","info","applyName","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart"].forEach(id => $(id).disabled = !on);
         $("connect").disabled = on;
       }
 
@@ -176,6 +181,8 @@
             `nom : <b style="color:var(--phosphor)">${msg.name||"?"}</b><br>` +
             `capteurs : <b>${msg.sensors||"(aucun)"}</b><br>` +
             `IP : ${msg.ip||"?"} · WiFi : ${msg.connected ? "✅" : "❌"}`;
+          // pré-remplir le nom connu
+          if (msg.name && msg.name !== "?" && !$("dname").value) $("dname").value = msg.name;
           // pré-cocher les capteurs connus
           const active = (msg.sensors||"").split(",").map(s=>s.trim());
           document.querySelectorAll("#sensorList input").forEach(c => c.checked = active.includes(c.value));
@@ -241,6 +248,7 @@
       };
 
       $("info").onclick = () => send({ cmd: "info" });
+      $("applyName").onclick = () => send({ cmd: "set_name", name: $("dname").value });
       $("applyWifi").onclick = () => send({ cmd: "set_wifi", ssid: $("wssid").value, pass: $("wpass").value });
       $("applyMqtt").onclick = () => send({ cmd: "set_mqtt", broker: $("mbroker").value, user: $("muser").value, pass: $("mpass").value });
       $("applySensors").onclick = () => {

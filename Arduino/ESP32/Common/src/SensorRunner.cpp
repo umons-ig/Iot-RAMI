@@ -164,6 +164,9 @@ void SensorRunner::processSerialLine(const String& line) {
                   String((const char*)(doc["user"] | "")),
                   String((const char*)(doc["pass"] | "")));
     Serial.println("{\"resp\":\"set_mqtt\",\"ok\":true}");
+  } else if (cmd == "set_name") {
+    saveDeviceName(String((const char*)(doc["name"] | "")));
+    Serial.println("{\"resp\":\"set_name\",\"ok\":true}");
   } else if (cmd == "set_sensors") {
     saveSensors(String((const char*)(doc["sensors"] | "")));
     Serial.println("{\"resp\":\"set_sensors\",\"ok\":true}");
