@@ -56,10 +56,16 @@ extern char saved_name[40];
 extern char saved_topic[50];
 extern char saved_topic_sensor[60];
 extern char saved_topic_server[60];
+// Liste de capteurs sélectionnés via le portail captif (CSV, ex. "dht22,bh1750").
+// Utilisée par le firmware unifié en mode RUNTIME_SENSORS (variante A). §A
+extern char saved_sensors[120];
 
 /************************************ Function prototypes *************************************/
 // Wifi and security
 void setup_wifi();
+// Charge la liste de capteurs sélectionnés (NVS) dans saved_sensors, SANS
+// connecter le WiFi — à appeler avant de construire les capteurs (variante A).
+void loadSavedSensorsFromNVS();
 void processWifiManager();
 void setCACertForTLS(WiFiClientSecure& client, const char* certificate);
 // Mqtt (connexion, command reception and message publication)

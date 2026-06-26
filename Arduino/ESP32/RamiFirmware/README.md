@@ -20,6 +20,17 @@ Au 1ᵉʳ boot : se connecter au point d'accès du portail captif → renseigner
 broker/identifiants MQTT + nom du capteur. (Maintenir BOOT/GPIO0 au démarrage pour
 réinitialiser ces réglages.)
 
+### Binaire universel (variante A — choix au runtime)
+
+```bash
+pio run -e universal -t upload      # tous les drivers compilés, aucun choisi au build
+```
+
+Le même binaire est flashé partout ; on choisit les **capteurs actifs au portail
+captif** (champ « Capteurs », CSV — ex. `dht22,bh1750,sgp30`). Aucune recompilation
+pour changer de capteur. *(Pins aux valeurs par défaut ; la config des pins en NVS
+est l'étape suivante.)*
+
 ## Architecture
 
 ```
