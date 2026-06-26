@@ -334,6 +334,11 @@
 								{{ selected.type }}
 							</span>
 						</div>
+						<router-link
+							class="btn-compare"
+							:to="{ name: 'ZoneMonitor', params: { id: selected.id } }">
+							▦ COMPARER LES CAPTEURS
+						</router-link>
 					</div>
 
 					<!-- Stats de la zone -->
@@ -724,6 +729,25 @@
 		justify-content: space-between;
 		padding: 1rem;
 		border-bottom: 1px solid var(--color-border);
+	}
+	.btn-compare {
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		padding: 6px 12px;
+		border: 1px solid var(--color-border-bright);
+		color: var(--color-text-muted);
+		text-decoration: none;
+		white-space: nowrap;
+		transition: all 0.15s;
+		flex-shrink: 0;
+	}
+	.btn-compare:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+		background: var(--color-primary-dim);
+		box-shadow: 0 0 8px var(--color-primary-glow);
 	}
 	.detail-title {
 		font-family: var(--font-display);
