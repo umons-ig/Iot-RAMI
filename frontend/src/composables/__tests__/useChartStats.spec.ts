@@ -59,5 +59,10 @@ describe("useChartStats", () => {
 		expect(unitFor("humidity")).toBe("%")
 		expect(unitFor("inconnu")).toBe("")
 		expect(MEASURE_UNITS.spo2).toBe("%")
+		// Types domotique
+		expect(unitFor("illuminance")).toBe("lx")
+		expect(unitFor("co2")).toBe("ppm")
+		expect(unitFor("tvoc")).toBe("ppb")
+		expect(unitFor("occupancy")).toBe("")
 	})
 })
