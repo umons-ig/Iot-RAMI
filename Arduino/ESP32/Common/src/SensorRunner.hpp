@@ -25,6 +25,11 @@ public:
   void onMqttMessage(char* topic, uint8_t* payload, unsigned int length);
 
 private:
+  // Console série USB (protocole JSON) : config WiFi/MQTT/capteurs + lecture
+  // live des capteurs depuis la page web (Web Serial). Cf. docs/console.
+  void handleSerialConsole();
+  void processSerialLine(const String& line);
+
   PubSubClient& client;
   ISensor& sensor;
   bool& allowToPublish;
@@ -34,6 +39,7 @@ private:
   unsigned long previousSample = 0;
   unsigned long previousPing = 0;
   unsigned long previousStart = 0;
+  String serialLine;
 };
 
 #endif // SENSOR_RUNNER_HPP
