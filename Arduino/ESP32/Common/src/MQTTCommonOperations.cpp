@@ -39,8 +39,11 @@ const char* MSG_MEASURE = "measures";
 
 /****** NTP Client Settings; PROGREM because these settings are configured only once at the beginning *******/
 const char* NTP_SERVER PROGMEM = "pool.ntp.org";
+// Epoch UTC strict : aucun décalage horaire ne doit entrer dans un timestamp
+// epoch. Le DAYLIGHT_OFFSET_SEC=3600 précédent décalait TOUTES les mesures d'1 h
+// (datation médicale faussée). Cf. revue MQTT §2.
 const long GMT_OFFSET_SEC = 0;
-const int DAYLIGHT_OFFSET_SEC = 3600;
+const int DAYLIGHT_OFFSET_SEC = 0;
 
 WiFiManager wm;
 WiFiManagerParameter broker("broker", "MQTT Broker IP", "192.168.10.4", 40);
@@ -135,6 +138,10 @@ void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt
     previousReconnectMillis = currentMillis;
 
     Serial.print("Attempting MQTT connection...");
+    // Buffer PubSubClient porté à 512 o pour TOUS les capteurs (défaut 256 o) :
+    // au-delà, publish() abandonne en silence (multi-mesures / batch). Centralisé
+    // ici pour ne plus dépendre d'un setBufferSize par sketch. Cf. revue MQTT §4.
+    client.setBufferSize(512);
     String clientId = "RAM1-Sensor-";
     clientId += WiFi.macAddress();
     if (client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
@@ -148,8 +155,12 @@ void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt
 }
 
 void publishJSONMessage(PubSubClient& client, const char* topic, const char* json_buffer, const bool& retained) {
-    if (client.publish(topic, json_buffer, retained)) {
-        // Serial.printf(">>>>[%s]: sending %s\n", topic, json_buffer);
+    if (!client.publish(topic, json_buffer, retained)) {
+        // publish() renvoie false si le paquet dépasse le buffer (256/512 o) ou
+        // si la connexion est tombée : on le SIGNALE au lieu d'abandonner en
+        // silence (cf. revue MQTT §4).
+        Serial.print("!!!! [MQTT] publish ECHOUE (paquet trop gros ou deconnecte) sur ");
+        Serial.println(topic);
     }
 }
 
