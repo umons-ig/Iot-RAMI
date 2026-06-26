@@ -134,6 +134,8 @@ const useSession = () => {
 		labels: [],
 		datasets: [],
 	})
+	// Chargement des données d'une session historique (rejeu) — pour l'UI.
+	const loadingSessionData = ref(false)
 
 	// *************************** [ATTRIBUTE]  EXTRA INFORMATION (for realtime graph)
 	const timeSinceLastValue = ref(0)
@@ -355,6 +357,7 @@ const useSession = () => {
 	}
 
 	const fetchDataAndUpdateChart = async (idSession: string) => {
+		loadingSessionData.value = true
 		try {
 			chartData.value = { labels: [], datasets: [] }
 			const response = await axios.get(`${getURLForFetchingSessionData(idSession)}?maxPoints=1000`)
@@ -380,6 +383,8 @@ const useSession = () => {
 			chartData.value = { labels, datasets }
 		} catch (error) {
 			console.error("Error fetching data", error)
+		} finally {
+			loadingSessionData.value = false
 		}
 	}
 
@@ -427,6 +432,7 @@ const useSession = () => {
 		idSession,
 		topic,
 		chartData,
+		loadingSessionData,
 		timeSinceLastValue,
 		transmissionSpeed,
 		connectionState,

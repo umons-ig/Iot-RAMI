@@ -1,5 +1,7 @@
 <template>
-	<div class="session-card">
+	<div
+		class="session-card"
+		:class="{ 'session-card--active': selected }">
 		<div class="session-left">
 			<div
 				class="session-status-bar"
@@ -20,6 +22,13 @@
 				EN COURS
 			</span>
 		</div>
+		<button
+			class="btn-replay"
+			:class="{ 'btn-replay--active': selected }"
+			:aria-pressed="selected"
+			@click.stop="$emit('replay', session.id)">
+			▷ REVOIR
+		</button>
 		<button
 			class="btn-export"
 			:class="`btn-export--${csvState}`"
@@ -44,7 +53,12 @@
 				type: Object,
 				required: true,
 			},
+			selected: {
+				type: Boolean,
+				default: false,
+			},
 		},
+		emits: ["replay"],
 		setup() {
 			const { calculateDuration, formatHumanReadableDate } = useSensor(undefined)
 			const { exportSessionToCsv } = useSession()
@@ -238,5 +252,35 @@
 		border-color: var(--color-danger);
 		color: var(--color-danger);
 		background: var(--color-danger-dim);
+	}
+
+	.btn-replay {
+		padding: 0.55rem 0.85rem;
+		min-height: 2.75rem;
+		font-size: 0.68rem;
+		font-family: var(--font-mono);
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		border: 1px solid var(--color-border-bright);
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: all 0.15s;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	.btn-replay:hover,
+	.btn-replay--active {
+		background: var(--color-primary-dim);
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+		box-shadow: 0 0 8px var(--color-primary-glow);
+	}
+
+	.session-card--active {
+		border-left: 2px solid var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 	}
 </style>
