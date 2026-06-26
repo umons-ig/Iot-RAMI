@@ -48,6 +48,7 @@ function createFogInstance(): any {
     close: outboxClose,
   };
   instance.buffer = new Map();
+  instance.knownDevices = new Set();
   instance.flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   instance.flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   instance.maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -69,6 +70,35 @@ function createFogInstance(): any {
 function makeMsg(payload: Record<string, unknown>): Buffer {
   return Buffer.from(JSON.stringify(payload));
 }
+
+describe("MqttFog — gestion à distance des ESP", () => {
+  let fog: any;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fog = createFogInstance();
+  });
+
+  it("mémorise les ESP vus (getKnownDevices), pas les Zigbee", () => {
+    fog.handleMessageReceivedFromSensor("capteur-A/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
+    fog.handleMessageReceivedFromSensor("capteur-B/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
+    expect(fog.getKnownDevices().sort()).toEqual(["capteur-A/sensor", "capteur-B/sensor"]);
+  });
+
+  it("publishDeviceCommand publie sur le topic /server", () => {
+    fog.publishDeviceCommand("capteur-A/sensor", { cmd: "restart" });
+    expect(mqttPublish).toHaveBeenCalledWith("capteur-A/server", JSON.stringify({ cmd: "restart" }));
+  });
+
+  it("broadcastDeviceCommand diffuse à tous et renvoie le compte", () => {
+    fog.handleMessageReceivedFromSensor("capteur-A/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
+    fog.handleMessageReceivedFromSensor("capteur-B/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
+    mqttPublish.mockClear();
+    const n = fog.broadcastDeviceCommand({ cmd: "ota", url: "http://f/u.bin" });
+    expect(n).toBe(2);
+    expect(mqttPublish).toHaveBeenCalledWith("capteur-A/server", expect.stringContaining("ota"));
+    expect(mqttPublish).toHaveBeenCalledWith("capteur-B/server", expect.stringContaining("ota"));
+  });
+});
 
 describe("MqttFog — handleMessageReceivedFromSensor (routing)", () => {
   let fog: any;

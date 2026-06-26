@@ -33,6 +33,21 @@ export const METRICS_CONFIG = {
   port: parseInt(process.env.METRICS_PORT ?? "9100"),
 };
 
+// ─── Web server de gestion des ESP (commandes à distance) ─────────────────────
+export const MANAGEMENT_CONFIG = {
+  port: parseInt(process.env.MGMT_PORT ?? "9200"),
+};
+
+// ─── Mises à jour firmware (OTA via GitHub Releases — « Watchtower firmware ») ─
+export const FIRMWARE_CONFIG = {
+  // Désactivé par défaut : l'auto-OTA en contexte médical doit être explicite.
+  enabled: (process.env.FIRMWARE_OTA_ENABLED ?? "false") === "true",
+  repo: process.env.FIRMWARE_REPO ?? "GaspardMenou/Iot-RAMI",
+  env: process.env.FIRMWARE_ENV ?? "universal",
+  currentVersion: process.env.FIRMWARE_VERSION ?? "v0.0.0",
+  pollIntervalMs: parseInt(process.env.FIRMWARE_POLL_INTERVAL_MS ?? "3600000"), // 1 h
+};
+
 // ─── Intégration Zigbee2MQTT ──────────────────────────────────────────────────
 // Préfixe des topics publiés par Z2M sur le même broker (cf. docs/MULTI_PROTOCOL_ZIGBEE.md).
 export const ZIGBEE_CONFIG = {
