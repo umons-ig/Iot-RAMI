@@ -5,11 +5,12 @@
 #ifndef CONTACT_PIN
 #define CONTACT_PIN 26
 #endif
-// Contact d'ouverture (ILS/reed switch porte/fenêtre) -> contact (1=fermé).
 class ContactDriver : public ISensor {
 public:
   void begin() override;
   int read(SensorMeasure* out, int maxOut) override;
+private:
+  int contactPin = CONTACT_PIN;
 };
 #endif
 #endif

@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include "SensorRunner.hpp"
 #include "MQTTCommonOperations.hpp"
+#include "PinConfig.hpp"
 
 // Intervalles du protocole (identiques pour tous les capteurs).
 static const long PING_INTERVAL_MS = 20000;
@@ -26,6 +27,7 @@ void SensorRunner::setup() {
   Serial.begin(115200);
   setup_wifi();  // + watchdog/reconnexion WiFi (cf. Common)
   configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+  loadPinConfig();  // pins NVS chargées AVANT begin() (les drivers les lisent)
   sensor.begin();
   client.setServer(saved_broker, mqttPort);
   g_runner = this;
@@ -138,16 +140,17 @@ void SensorRunner::handleSerialConsole() {
 
 void SensorRunner::processSerialLine(const String& line) {
   if (line.length() == 0) return;
-  DynamicJsonDocument doc(384);
+  DynamicJsonDocument doc(512);
   if (deserializeJson(doc, line)) return; // pas du JSON -> ignoré
   const String cmd = doc["cmd"] | "";
   if (cmd.length() == 0) return;
 
   if (cmd == "info") {
-    DynamicJsonDocument r(256);
+    DynamicJsonDocument r(512);
     r["resp"] = "info";
     r["name"] = saved_name;
     r["sensors"] = saved_sensors;
+    r["pins"] = getPinConfigJson();
     r["ip"] = WiFi.localIP().toString();
     r["connected"] = (WiFi.status() == WL_CONNECTED);
     serializeJson(r, Serial);
@@ -164,6 +167,12 @@ void SensorRunner::processSerialLine(const String& line) {
   } else if (cmd == "set_sensors") {
     saveSensors(String((const char*)(doc["sensors"] | "")));
     Serial.println("{\"resp\":\"set_sensors\",\"ok\":true}");
+  } else if (cmd == "set_pins") {
+    // Config des pins (JSON imbriqué) -> persistée en NVS. Effet au reboot.
+    String pinsJson;
+    serializeJson(doc["pins"], pinsJson);
+    savePinConfig(pinsJson);
+    Serial.println("{\"resp\":\"set_pins\",\"ok\":true}");
   } else if (cmd == "read") {
     // Lecture LIVE des capteurs actifs (test depuis la page web).
     sensor.poll();

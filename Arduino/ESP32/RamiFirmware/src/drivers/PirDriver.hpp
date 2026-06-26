@@ -5,11 +5,12 @@
 #ifndef PIR_PIN
 #define PIR_PIN 27
 #endif
-// Détecteur de mouvement PIR (HC-SR501) -> occupancy (0/1).
 class PirDriver : public ISensor {
 public:
   void begin() override;
   int read(SensorMeasure* out, int maxOut) override;
+private:
+  int pirPin = PIR_PIN;
 };
 #endif
 #endif
