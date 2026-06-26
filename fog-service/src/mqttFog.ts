@@ -33,12 +33,19 @@ export const mapZigbeeToMeasures = (
   return measures;
 };
 
+// Élément bufferisé : un lot de mesures horodaté (timestamp en µs, optionnel
+// pour les sources qui n'en fournissent pas).
+interface BufferedMeasure {
+  measures: unknown;
+  timestamp?: number;
+}
+
 class MqttFog {
   private static instance: MqttFog | undefined;
   private mqttClient!: MqttClient;
   private kafkaService!: KafkaService;
   private outbox!: Outbox;
-  private buffer = new Map<string, any[]>();
+  private buffer = new Map<string, BufferedMeasure[]>();
   // Topics /sensor des ESP vus au moins une fois (≠ Zigbee). Sert au web server
   // de gestion à pousser des commandes (ota/set_wifi/set_mqtt/restart). §gestion
   private knownDevices = new Set<string>();
@@ -306,7 +313,7 @@ class MqttFog {
     }
     return count;
   }
-  private handleMeasurement(topic: string, data: any): void {
+  private handleMeasurement(topic: string, data: BufferedMeasure): void {
     if (!this.buffer.has(topic)) {
       console.warn(`⚠️ [handleMeasurement] Mesures reçues sans session active pour: ${topic} — ignorées`);
       return;

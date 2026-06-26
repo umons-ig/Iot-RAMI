@@ -29,8 +29,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Installer PlatformIO
-        run: pip install --upgrade platformio
+      - name: Installer PlatformIO + esptool
+        # esptool<5 : la v5 renomme les commandes (merge_bin -> merge-bin) ; on
+        # garde la syntaxe v4 validée. PlatformIO ne fournit pas esptool en module
+        # Python importable -> on l'installe explicitement (python -m esptool).
+        run: pip install --upgrade platformio "esptool<5"
 
       - name: Build firmware (env universal)
         working-directory: Arduino/ESP32/RamiFirmware

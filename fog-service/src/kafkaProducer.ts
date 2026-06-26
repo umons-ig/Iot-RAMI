@@ -1,5 +1,12 @@
 import { Kafka, Producer, CompressionTypes } from "kafkajs";
 import { KAFKA_CONFIG } from "./constants";
+
+// Enregistrement publié sur Kafka : la clé de partition est le topic capteur.
+interface KafkaRecord {
+  sensorTopic?: string;
+  [key: string]: unknown;
+}
+
 class KafkaService {
   private static instance: KafkaService | undefined;
   private kafka!: Kafka;
@@ -32,7 +39,11 @@ class KafkaService {
         ssl: process.env.KAFKA_SSL === "true",
         sasl: process.env.KAFKA_SASL_USERNAME
           ? {
-              mechanism: (process.env.KAFKA_SASL_MECHANISM ?? "scram-sha-512") as any,
+              // Cast vers un littéral de l'union discriminée SASLOptions de
+              // kafkajs (la valeur réelle vient de l'env ; ce cast satisfait juste
+              // le compilateur, sans `any`).
+              mechanism: (process.env.KAFKA_SASL_MECHANISM ??
+                "scram-sha-512") as "scram-sha-512",
               username: process.env.KAFKA_SASL_USERNAME,
               password: process.env.KAFKA_SASL_PASSWORD ?? "",
             }
@@ -72,11 +83,11 @@ class KafkaService {
     }
   }
 
-  public async publishSensorData(topic: string, data: any): Promise<void> {
+  public async publishSensorData(topic: string, data: KafkaRecord): Promise<void> {
     try {
       await this.producer.send({
         topic,
-        messages: [{ key: data.sensorTopic, value: JSON.stringify(data) }],
+        messages: [{ key: data.sensorTopic ?? null, value: JSON.stringify(data) }],
         compression: CompressionTypes.GZIP,
       });
     } catch (error) {
@@ -86,11 +97,11 @@ class KafkaService {
   }
   public async publishBatchSensorData(
     topic: string,
-    dataArray: any[],
+    dataArray: KafkaRecord[],
   ): Promise<void> {
     try {
       const messages = dataArray.map((data) => ({
-        key: data.sensorTopic,
+        key: data.sensorTopic ?? null,
         value: JSON.stringify(data),
       }));
       await this.producer.send({
