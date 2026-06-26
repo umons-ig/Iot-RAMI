@@ -1,0 +1,16 @@
+{
+  "name": "RAMI Firmware (universel)",
+  "version": "latest",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "https://github.com/GaspardMenou/Iot-RAMI/releases/latest/download/rami-universal-factory.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
