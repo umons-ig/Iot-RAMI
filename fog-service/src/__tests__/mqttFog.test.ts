@@ -1,4 +1,4 @@
-import { TOPICS, COMMANDS, MESSAGE_FIELDS, BUFFER_CONFIG } from "../constants";
+import { TOPICS, COMMANDS, MESSAGE_FIELDS, BUFFER_CONFIG, ZIGBEE_CONFIG } from "../constants";
 
 // --- Mocks MQTT ---
 const mqttPublish = jest.fn();
@@ -31,7 +31,7 @@ const outboxPurgeSynced = jest.fn().mockResolvedValue(0);
 const outboxClose = jest.fn().mockResolvedValue(undefined);
 
 // Import APRES les mocks
-import MqttFog from "../mqttFog";
+import MqttFog, { mapZigbeeToMeasures } from "../mqttFog";
 
 // Helper : crée une instance de MqttFog sans passer par getInstance()
 // (qui appellerait connectBroker + KafkaService.getInstance sur le singleton).
@@ -52,6 +52,8 @@ function createFogInstance(): any {
   instance.flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   instance.maxBufferSize = BUFFER_CONFIG.maxBufferSize;
   instance.sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
+  instance.zigbeeTopicPrefix = ZIGBEE_CONFIG.topicPrefix;
+  instance.dropCount = 0;
   instance.replicatorBatchSize = 200;
   instance.isReplicating = false;
   instance.dropWarnedTopics = new Set();
@@ -463,5 +465,71 @@ describe("MqttFog — replicate (réplicateur store-and-forward)", () => {
     fog.isReplicating = true;
     await fog.replicate();
     expect(outboxPullPending).not.toHaveBeenCalled();
+  });
+});
+
+describe("MqttFog — adaptateur Zigbee2MQTT (§4)", () => {
+  describe("mapZigbeeToMeasures", () => {
+    it("mappe les nombres et booléens, ignore le reste", () => {
+      const measures = mapZigbeeToMeasures({
+        temperature: 21.5,
+        humidity: 50,
+        occupancy: true,
+        contact: false,
+        device: { ieee: "0x00" }, // objet -> ignoré
+        last_seen: "2026-01-01", // chaîne -> ignorée
+        battery: 80,
+      });
+      expect(measures).toEqual([
+        { measureType: "temperature", value: 21.5 },
+        { measureType: "humidity", value: 50 },
+        { measureType: "occupancy", value: 1 },
+        { measureType: "contact", value: 0 },
+        { measureType: "battery", value: 80 },
+      ]);
+    });
+
+    it("renvoie [] pour un payload vide ou non-objet", () => {
+      expect(mapZigbeeToMeasures({})).toEqual([]);
+      expect(mapZigbeeToMeasures(null as any)).toEqual([]);
+    });
+  });
+
+  describe("routage + session glissante", () => {
+    let fog: any;
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.useFakeTimers();
+      fog = createFogInstance();
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it("ouvre une session auto et bufferise les mesures d'un device Zigbee", async () => {
+      await fog.handleZigbeeMessage("zigbee2mqtt/salon-temp", {
+        temperature: 21,
+        humidity: 55,
+      });
+      // Session auto-ouverte (START dans l'outbox) + buffer alimenté
+      const starts = outboxEnqueue.mock.calls.filter(
+        (c: unknown[]) => (c[0] as { type?: string })?.type === "start"
+      );
+      expect(starts).toHaveLength(1);
+      expect(fog.buffer.has("salon-temp/sensor")).toBe(true);
+      expect(fog.buffer.get("salon-temp/sensor")).toHaveLength(1);
+    });
+
+    it("ignore les topics zigbee2mqtt/bridge/*", () => {
+      fog.handleMessageReceivedFromSensor(
+        "zigbee2mqtt/bridge/devices",
+        makeMsg({ foo: 1 })
+      );
+      expect(outboxEnqueue).not.toHaveBeenCalled();
+    });
+
+    it("n'ouvre pas de session si aucune mesure numérique", async () => {
+      await fog.handleZigbeeMessage("zigbee2mqtt/x", { state: "ON" });
+      expect(fog.buffer.has("x/sensor")).toBe(false);
+      expect(outboxEnqueue).not.toHaveBeenCalled();
+    });
   });
 });

@@ -7,9 +7,31 @@ import {
   COMMANDS,
   BUFFER_CONFIG,
   OUTBOX_CONFIG,
+  ZIGBEE_CONFIG,
 } from "./constants";
 import KafkaService from "./kafkaProducer";
 import { Outbox } from "./outbox";
+
+/**
+ * Convertit un payload plat Zigbee2MQTT (`{ temperature: 21, humidity: 50,
+ * occupancy: true, … }`) en mesures RAMI. Auto-descriptif façon Z2M : toute clé
+ * numérique devient une mesure ; les booléens → 0/1 ; le reste (chaînes, objets,
+ * null, métadonnées) est ignoré. Cf. docs/MULTI_PROTOCOL_ZIGBEE.md §4.
+ */
+export const mapZigbeeToMeasures = (
+  payload: Record<string, unknown>
+): Array<{ measureType: string; value: number }> => {
+  if (!payload || typeof payload !== "object") return [];
+  const measures: Array<{ measureType: string; value: number }> = [];
+  for (const [key, raw] of Object.entries(payload)) {
+    if (typeof raw === "number" && Number.isFinite(raw)) {
+      measures.push({ measureType: key, value: raw });
+    } else if (typeof raw === "boolean") {
+      measures.push({ measureType: key, value: raw ? 1 : 0 });
+    }
+  }
+  return measures;
+};
 
 class MqttFog {
   private static instance: MqttFog | undefined;
@@ -26,6 +48,7 @@ class MqttFog {
   private sessionTimers: Map<string, NodeJS.Timeout> = new Map();
   private sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
   private sensorTimeoutMs = BUFFER_CONFIG.sensorTimeoutMs;
+  private zigbeeTopicPrefix = ZIGBEE_CONFIG.topicPrefix;
   private flushInterval: NodeJS.Timeout | undefined;
   // ─── Store-and-forward (réplicateur outbox → Kafka) ───────────────────────
   private replicatorIntervalMs = OUTBOX_CONFIG.replicatorIntervalMs;
@@ -274,6 +297,35 @@ class MqttFog {
     }
     dataArray.push(data);
   }
+  /**
+   * Traite un message Zigbee2MQTT (`zigbee2mqtt/<device>`). Les appareils Zigbee
+   * publient en continu, sans START/STOP et sans timestamp : on ouvre une
+   * **session glissante** automatique (rotation horaire via sessionMaxDurationMs)
+   * et on **horodate à la réception** (les capteurs Zigbee sont bas débit, cf.
+   * docs/MULTI_PROTOCOL_ZIGBEE.md §5). Le watchdog backend (§4.2) gère le silence.
+   */
+  private async handleZigbeeMessage(
+    z2mTopic: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    const device = z2mTopic.slice(this.zigbeeTopicPrefix.length);
+    if (!device) return;
+    const measures = mapZigbeeToMeasures(payload);
+    if (measures.length === 0) return;
+
+    // Topic RAMI normalisé : l'appareil Zigbee devient un capteur comme un autre
+    // (auto-discover, sessions, etc.).
+    const sensorTopic = `${device}${TOPICS.SENSOR}`;
+    if (!this.buffer.has(sensorTopic)) {
+      await this.startSession(sensorTopic);
+    }
+    // Horodatage à la réception, en microsecondes (cohérent avec le reste du pipeline).
+    this.handleMeasurement(sensorTopic, {
+      measures,
+      timestamp: Date.now() * 1000,
+    });
+  }
+
   private async flushBuffer(topic: string): Promise<void> {
     const dataArray = this.buffer.get(topic);
     if (dataArray && dataArray.length > 0) {
@@ -373,6 +425,17 @@ class MqttFog {
     message: Buffer,
   ): void {
     try {
+      // Voie Zigbee : topics zigbee2mqtt/<device> (on ignore zigbee2mqtt/bridge/*).
+      if (topic.startsWith(this.zigbeeTopicPrefix)) {
+        if (!topic.startsWith(`${this.zigbeeTopicPrefix}bridge`)) {
+          const payload = JSON.parse(message.toString());
+          this.handleZigbeeMessage(topic, payload).catch((e) =>
+            console.error("❌ [handleZigbeeMessage]", e),
+          );
+        }
+        return;
+      }
+
       if (!topic.endsWith(TOPICS.SENSOR)) {
         return;
       }
