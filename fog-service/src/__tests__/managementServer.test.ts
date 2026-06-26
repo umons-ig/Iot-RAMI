@@ -1,8 +1,35 @@
 import {
   buildCommandPayload,
   handleCommand,
+  buildStatus,
   DeviceCommandProvider,
 } from "../managementServer";
+
+describe("buildStatus", () => {
+  it("agrège le snapshot + devices + uptime et calcule healthy", () => {
+    const s = buildStatus(
+      { outboxPending: 3, kafkaConnected: true, drops: 0, bufferSize: 12 },
+      2,
+      42.7,
+    );
+    expect(s).toMatchObject({
+      outboxPending: 3,
+      kafkaConnected: true,
+      devices: 2,
+      uptimeSec: 43,
+      healthy: true,
+    });
+  });
+
+  it("healthy=false si Kafka déconnecté ou outbox indisponible", () => {
+    expect(
+      buildStatus({ outboxPending: 0, kafkaConnected: false, drops: 0, bufferSize: 0 }, 0, 1).healthy,
+    ).toBe(false);
+    expect(
+      buildStatus({ outboxPending: -1, kafkaConnected: true, drops: 0, bufferSize: 0 }, 0, 1).healthy,
+    ).toBe(false);
+  });
+});
 
 describe("buildCommandPayload", () => {
   it("ota: nécessite une url", () => {
@@ -56,6 +83,9 @@ describe("handleCommand", () => {
       getKnownDevices: () => ["a-topic/sensor", "b-topic/sensor"],
       publishDeviceCommand: jest.fn(),
       broadcastDeviceCommand: jest.fn().mockReturnValue(2),
+      getMetricsSnapshot: jest
+        .fn()
+        .mockResolvedValue({ outboxPending: 0, kafkaConnected: true, drops: 0, bufferSize: 0 }),
     };
   });
 

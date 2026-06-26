@@ -11,10 +11,32 @@
  */
 import http from "http";
 
+export interface FogMetricsSnapshot {
+  outboxPending: number;
+  kafkaConnected: boolean;
+  drops: number;
+  bufferSize: number;
+}
+
 export interface DeviceCommandProvider {
   getKnownDevices(): string[];
   publishDeviceCommand(sensorTopic: string, payload: Record<string, unknown>): void;
   broadcastDeviceCommand(payload: Record<string, unknown>): number;
+  getMetricsSnapshot(): Promise<FogMetricsSnapshot>;
+}
+
+/** Construit l'objet d'état du fog (logique pure, testable). */
+export function buildStatus(
+  snapshot: FogMetricsSnapshot,
+  deviceCount: number,
+  uptimeSec: number,
+): Record<string, unknown> {
+  return {
+    ...snapshot,
+    devices: deviceCount,
+    uptimeSec: Math.round(uptimeSec),
+    healthy: snapshot.kafkaConnected && snapshot.outboxPending >= 0,
+  };
 }
 
 // Commandes autorisées (liste blanche).
@@ -95,6 +117,8 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
  li{margin:.25rem 0;} code{color:#7ee787;}
 </style></head><body>
 <h1>RAMI · Gestion des capteurs ESP</h1>
+<div class="card"><strong>État du fog</strong>
+ <div id="status" style="margin-top:.5rem;line-height:1.8">chargement…</div></div>
 <div class="card"><strong>Capteurs connus</strong><ul id="devs"><li>chargement…</li></ul>
 <button onclick="cmd('all','restart')">Restart TOUS</button></div>
 <div class="card"><strong>Changer le WiFi (tous)</strong><br>
@@ -111,7 +135,14 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
   body:JSON.stringify(Object.assign({target,cmd:c},extra||{}))});}
  function setWifi(){cmd('all','set_wifi',{ssid:ssid.value,pass:pass.value});}
  function ota(){cmd('all','ota',{url:otaurl.value});}
- load();setInterval(load,5000);
+ function dot(ok){return '<span style="color:'+(ok?'#2bf08a':'#ff6b6b')+'">●</span>';}
+ async function status(){const r=await fetch('/api/status');const s=await r.json();
+  document.getElementById('status').innerHTML=
+   dot(s.healthy)+' santé globale &nbsp; '+dot(s.kafkaConnected)+' Kafka<br>'+
+   'outbox en attente : <code>'+s.outboxPending+'</code> &nbsp; buffer : <code>'+s.bufferSize+'</code><br>'+
+   'messages droppés : <code>'+s.drops+'</code> &nbsp; capteurs : <code>'+s.devices+'</code><br>'+
+   'uptime : <code>'+s.uptimeSec+'s</code>';}
+ load();status();setInterval(load,5000);setInterval(status,5000);
 </script></body></html>`;
 
 export function createManagementServer(
@@ -123,6 +154,24 @@ export function createManagementServer(
     if (req.method === "GET" && url === "/api/devices") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ devices: fog.getKnownDevices() }));
+      return;
+    }
+    if (req.method === "GET" && url === "/api/status") {
+      fog
+        .getMetricsSnapshot()
+        .then((snap) => {
+          const status = buildStatus(
+            snap,
+            fog.getKnownDevices().length,
+            process.uptime(),
+          );
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify(status));
+        })
+        .catch((e) => {
+          res.writeHead(500, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: String(e) }));
+        });
       return;
     }
     if (req.method === "POST" && url === "/api/command") {
