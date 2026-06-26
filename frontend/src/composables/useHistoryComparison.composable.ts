@@ -33,6 +33,63 @@ interface RawDataPoint {
 // Dataset Chart.js pour la comparaison (axe X = ms relatifs)
 type ComparisonDataset = ChartDataset<"line", { x: number; y: number }[]>
 
+export interface ComparableThreshold {
+	minValue?: number | null
+	maxValue?: number | null
+}
+
+/** Formate une durée en ms de façon lisible (« 12m 30s », « 45s »). */
+export const formatDuration = (ms: number): string => {
+	if (!Number.isFinite(ms) || ms < 0) return "—"
+	const totalSeconds = Math.round(ms / 1000)
+	const m = Math.floor(totalSeconds / 60)
+	const s = totalSeconds % 60
+	if (m === 0) return `${s}s`
+	return s === 0 ? `${m}m` : `${m}m ${s}s`
+}
+
+/**
+ * Lignes de seuil horizontales (MIN/MAX) couvrant toute la plage temporelle
+ * [0, maxX] — superposées aux courbes de comparaison (§D). Pointillés, couleurs
+ * dédiées, exclues de la logique de stats côté graphe.
+ */
+export const buildThresholdLines = (thresholds: ComparableThreshold[], maxX: number): ComparisonDataset[] => {
+	const lines: ComparisonDataset[] = []
+	for (const t of thresholds) {
+		if (t.maxValue !== null && t.maxValue !== undefined) {
+			lines.push({
+				label: "SEUIL MAX",
+				data: [
+					{ x: 0, y: t.maxValue },
+					{ x: maxX, y: t.maxValue },
+				],
+				borderColor: "rgba(255,64,64,0.75)",
+				backgroundColor: "transparent",
+				borderDash: [6, 3],
+				borderWidth: 1.5,
+				pointRadius: 0,
+				fill: false,
+			} as ComparisonDataset)
+		}
+		if (t.minValue !== null && t.minValue !== undefined) {
+			lines.push({
+				label: "SEUIL MIN",
+				data: [
+					{ x: 0, y: t.minValue },
+					{ x: maxX, y: t.minValue },
+				],
+				borderColor: "rgba(0,207,255,0.75)",
+				backgroundColor: "transparent",
+				borderDash: [6, 3],
+				borderWidth: 1.5,
+				pointRadius: 0,
+				fill: false,
+			} as ComparisonDataset)
+		}
+	}
+	return lines
+}
+
 // ────────────────────────────────────────────────────────────
 //  Paths API
 // ────────────────────────────────────────────────────────────
@@ -64,6 +121,8 @@ export const useHistoryComparison = () => {
 	const loadingSessions = ref(false)
 	const loadingGraph = ref(false)
 	const errorMsg = ref("")
+	// Capteur courant (pour récupérer ses seuils à superposer). §D
+	const currentSensorId = ref<string | null>(null)
 
 	// ── API calls ──────────────────────────────────────────
 
@@ -86,6 +145,7 @@ export const useHistoryComparison = () => {
 		loadingSessions.value = true
 		errorMsg.value = ""
 		sessions.value = []
+		currentSensorId.value = sensorId
 		try {
 			const response = await axios.get(buildSensorSessionsUrl(sensorId), {
 				params: { page: 1, limit: 50 },
@@ -133,7 +193,15 @@ export const useHistoryComparison = () => {
 
 			allRawData.forEach((rawPoints, sessionIndex) => {
 				const sessionColor = PHOSPHOR_COLORS[sessionIndex % PHOSPHOR_COLORS.length]
-				const sessionLabel = `S${sessionIndex + 1}`
+				// Libellé enrichi de la durée réelle (aide à interpréter le recalage
+				// T+0 quand les sessions ont des durées très différentes). §D
+				const sessionId = selectedSessionIds[sessionIndex]
+				const meta = sessions.value.find(s => s.id === sessionId)
+				let sessionLabel = `S${sessionIndex + 1}`
+				if (meta?.createdAt && meta?.endedAt) {
+					const dur = new Date(meta.endedAt).getTime() - new Date(meta.createdAt).getTime()
+					sessionLabel = `S${sessionIndex + 1} (${formatDuration(dur)})`
+				}
 
 				// Regrouper les points par type de mesure
 				const byMeasureType = new Map<string, { time: number; value: number }[]>()
@@ -173,6 +241,22 @@ export const useHistoryComparison = () => {
 					} as ComparisonDataset)
 				})
 			})
+
+			// Superposition des seuils du capteur (lignes horizontales). §D
+			if (currentSensorId.value && datasets.length) {
+				let maxX = 0
+				for (const ds of datasets) {
+					const last = ds.data[ds.data.length - 1]
+					if (last && last.x > maxX) maxX = last.x
+				}
+				try {
+					const res = await axios.get(`/thresholds/sensor/${currentSensorId.value}`)
+					const thresholds = Array.isArray(res.data) ? res.data : []
+					datasets.push(...buildThresholdLines(thresholds, maxX))
+				} catch {
+					// Pas de seuil (404) ou erreur : on n'ajoute simplement rien.
+				}
+			}
 
 			comparisonData.value = { datasets }
 		} catch (err) {
