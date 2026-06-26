@@ -147,6 +147,15 @@ describe("MqttFog — startSession", () => {
     // Le second timer doit être différent (réenregistrement)
     expect(secondTimer).not.toBe(firstTimer);
   });
+
+  it("ne persiste PAS un second START si la session est déjà active (anti-doublon §5)", async () => {
+    await fog.startSession("capteur-A/sensor");
+    await fog.startSession("capteur-A/sensor");
+    const starts = outboxEnqueue.mock.calls.filter(
+      (c: unknown[]) => (c[0] as { type?: string })?.type === "start"
+    );
+    expect(starts).toHaveLength(1);
+  });
 });
 
 describe("MqttFog — handleStart", () => {

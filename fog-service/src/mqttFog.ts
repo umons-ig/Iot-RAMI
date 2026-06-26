@@ -1,4 +1,5 @@
 import mqtt, { MqttClient } from "mqtt";
+import os from "os";
 import {
   BROKER_INFO,
   TOPICS,
@@ -24,6 +25,7 @@ class MqttFog {
   private sensorTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private sessionTimers: Map<string, NodeJS.Timeout> = new Map();
   private sessionMaxDurationMs = BUFFER_CONFIG.sessionMaxDurationMs;
+  private sensorTimeoutMs = BUFFER_CONFIG.sensorTimeoutMs;
   private flushInterval: NodeJS.Timeout | undefined;
   // ─── Store-and-forward (réplicateur outbox → Kafka) ───────────────────────
   private replicatorIntervalMs = OUTBOX_CONFIG.replicatorIntervalMs;
@@ -149,7 +151,10 @@ class MqttFog {
   private async connectBroker(): Promise<void> {
     try {
       const connectOptions: mqtt.IClientOptions = {
-        clientId: "FogServiceClient",
+        // clientId unique par instance : Mosquitto impose l'unicité et déconnecte
+        // le doublon. Un id fixe provoquait une « bataille de reconnexions » si
+        // deux instances fog tournaient (rolling deploy). Cf. revue MQTT §5.
+        clientId: `FogServiceClient-${os.hostname()}-${process.pid}`,
         username: BROKER_INFO.username,
         password: BROKER_INFO.password,
         port: BROKER_INFO.port,
@@ -207,16 +212,21 @@ class MqttFog {
           console.error("❌ [Sensor Timeout] Erreur handleStop:", e),
         );
       }
-    }, 30000);
+    }, this.sensorTimeoutMs);
     this.sensorTimeouts.set(topic, timeout);
   }
   private async startSession(topic: string): Promise<void> {
-    if (!this.buffer.has(topic)) {
+    const isNewSession = !this.buffer.has(topic);
+    if (isNewSession) {
       this.buffer.set(topic, []);
+      // Write-ahead : START persisté AVANT l'ACK, UNIQUEMENT pour une nouvelle
+      // session. Le capteur ré-émet START toutes les 30 s tant qu'il n'a pas reçu
+      // l'ACK (ACK perdu, reconnexion) → sans cette garde, on empilait plusieurs
+      // événements START pour une seule session réelle. Cf. revue MQTT §5.
+      await this.outbox.enqueue({ type: "start", sensorTopic: topic, timestamp: Date.now() });
     }
-    // Write-ahead : on persiste l'événement START dans l'outbox AVANT l'ACK
-    // capteur. Si l'enqueue échoue, l'erreur remonte → handleStart n'ACK pas.
-    await this.outbox.enqueue({ type: "start", sensorTopic: topic, timestamp: Date.now() });
+    // Une session déjà active se contente de réarmer le timer de rotation (et le
+    // ré-ACK est envoyé par handleStart pour stopper la ré-émission du capteur).
     clearTimeout(this.sessionTimers.get(topic));
     const timer = setTimeout(() => {
       console.log(`🔄 [Session] Durée max atteinte pour ${topic} — rotation de session`);
