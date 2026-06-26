@@ -33,6 +33,12 @@ export const METRICS_CONFIG = {
   port: parseInt(process.env.METRICS_PORT ?? "9100"),
 };
 
+// ─── Intégration Zigbee2MQTT ──────────────────────────────────────────────────
+// Préfixe des topics publiés par Z2M sur le même broker (cf. docs/MULTI_PROTOCOL_ZIGBEE.md).
+export const ZIGBEE_CONFIG = {
+  topicPrefix: process.env.ZIGBEE_TOPIC_PREFIX ?? "zigbee2mqtt/",
+};
+
 export const BUFFER_CONFIG = {
   flushIntervalMs: parseInt(process.env.FLUSH_INTERVAL_MS ?? "200"),
   flushMaxSize: parseInt(process.env.FLUSH_MAX_SIZE ?? "50"),
