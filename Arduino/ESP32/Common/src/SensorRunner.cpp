@@ -133,15 +133,25 @@ void SensorRunner::handleSerialConsole() {
       serialLine = "";
     } else if (c != '\r') {
       serialLine += c;
-      if (serialLine.length() > 400) serialLine = ""; // garde-fou
+      if (serialLine.length() > 1024) serialLine = ""; // garde-fou (set_pins riche)
     }
   }
 }
 
 void SensorRunner::processSerialLine(const String& line) {
   if (line.length() == 0) return;
-  DynamicJsonDocument doc(512);
-  if (deserializeJson(doc, line)) return; // pas du JSON -> ignoré
+  DynamicJsonDocument doc(1024); // assez large pour set_pins (config imbriquée)
+  DeserializationError err = deserializeJson(doc, line);
+  if (err) {
+    // Si ça ressemblait à du JSON (commence par '{'), on signale ; sinon c'est
+    // un log debug -> ignoré en silence.
+    if (line[0] == '{') {
+      Serial.print("{\"resp\":\"error\",\"reason\":\"");
+      Serial.print(err.c_str());
+      Serial.println("\"}");
+    }
+    return;
+  }
   const String cmd = doc["cmd"] | "";
   if (cmd.length() == 0) return;
 
