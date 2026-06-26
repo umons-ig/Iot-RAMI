@@ -46,7 +46,12 @@ async function main() {
     fog.getMetricsSnapshot()
   );
   // Web server de gestion des ESP (liste + commandes à distance).
-  managementServer = createManagementServer(fog, MANAGEMENT_CONFIG.port);
+  managementServer = createManagementServer(
+    fog,
+    MANAGEMENT_CONFIG.port,
+    MANAGEMENT_CONFIG.token,
+    MANAGEMENT_CONFIG.host,
+  );
   // « Watchtower firmware » : poll GitHub Releases → OTA des ESP (opt-in).
   if (FIRMWARE_CONFIG.enabled) {
     firmwareUpdater = new FirmwareUpdater({

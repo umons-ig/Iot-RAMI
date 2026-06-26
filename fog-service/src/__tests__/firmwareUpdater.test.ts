@@ -84,6 +84,21 @@ describe("FirmwareUpdater.check", () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 
+  it("ne déclenche rien si le fetch rejette (réseau/timeout)", async () => {
+    const onUpdate = jest.fn();
+    const fetchFn = jest.fn().mockRejectedValue(new Error("network down"));
+    const up = new FirmwareUpdater({
+      repo: "x/y",
+      envName: "universal",
+      currentVersion: "v1.0.0",
+      intervalMs: 1000,
+      onUpdateAvailable: onUpdate,
+      fetchFn: fetchFn as unknown as typeof fetch,
+    });
+    await expect(up.check()).resolves.toBeUndefined();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it("ne déclenche rien si l'API échoue (ok=false)", async () => {
     const onUpdate = jest.fn();
     const fetchFn = jest.fn().mockResolvedValue(makeRes(null, false));

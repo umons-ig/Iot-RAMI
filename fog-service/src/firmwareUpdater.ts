@@ -86,11 +86,21 @@ export class FirmwareUpdater {
 
   async fetchLatestRelease(): Promise<GithubRelease | null> {
     const url = `https://api.github.com/repos/${this.opts.repo}/releases/latest`;
-    const res = await this.fetchFn(url, {
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "rami-fog" },
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as GithubRelease;
+    // Timeout 10 s : sans ça un appel GitHub qui pend bloquerait le check.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await this.fetchFn(url, {
+        headers: { Accept: "application/vnd.github+json", "User-Agent": "rami-fog" },
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as GithubRelease;
+    } catch {
+      return null; // réseau KO / timeout / JSON invalide -> réessai au prochain tick
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Un tick : récupère la dernière release et déclenche l'OTA si plus récente. */

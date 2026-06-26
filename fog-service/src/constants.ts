@@ -36,6 +36,12 @@ export const METRICS_CONFIG = {
 // ─── Web server de gestion des ESP (commandes à distance) ─────────────────────
 export const MANAGEMENT_CONFIG = {
   port: parseInt(process.env.MGMT_PORT ?? "9200"),
+  // Bind localhost par défaut : l'API pilote OTA/WiFi/restart de la flotte, elle
+  // ne doit PAS être exposée au LAN sans protection (contexte médical). Mettre
+  // une IP (ex. WireGuard) seulement avec MGMT_TOKEN défini.
+  host: process.env.MGMT_HOST ?? "127.0.0.1",
+  // Si défini, header `X-Mgmt-Token` requis sur /api/* (comparaison à temps constant).
+  token: process.env.MGMT_TOKEN ?? "",
 };
 
 // ─── Mises à jour firmware (OTA via GitHub Releases — « Watchtower firmware ») ─
