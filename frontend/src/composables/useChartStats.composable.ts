@@ -21,6 +21,12 @@ export const MEASURE_UNITS: Record<string, string> = {
 	x_position: "m",
 	y_position: "m",
 	people_count: "",
+	// Domotique
+	occupancy: "",
+	contact: "",
+	illuminance: "lx",
+	co2: "ppm",
+	tvoc: "ppb",
 }
 
 export const unitFor = (measureType: string): string => MEASURE_UNITS[measureType] ?? ""
