@@ -194,6 +194,10 @@ void performOta(const String& url) {
     if (url.length() == 0) return;
     Serial.print("[OTA] mise a jour depuis ");
     Serial.println(url);
+    // httpUpdate.update() est BLOQUANT (download ~1 Mo) et peut dépasser le délai
+    // du watchdog (15 s) sur lien lent -> reset en plein flash. On retire la tâche
+    // du watchdog le temps de l'OTA (cf. audit §F5). Sur échec, on la ré-arme.
+    esp_task_wdt_delete(NULL);
     WiFiClient otaClient;
     httpUpdate.rebootOnUpdate(true); // reboot automatique après flash réussi
     t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
@@ -209,6 +213,7 @@ void performOta(const String& url) {
             Serial.println("[OTA] succes (reboot)");
             break;
     }
+    esp_task_wdt_add(NULL); // ré-arme le watchdog (cas échec/no-update : pas de reboot)
 }
 
 void saveMqttCreds(const String& broker, const String& user, const String& pass) {
@@ -258,7 +263,9 @@ void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt
     // Buffer PubSubClient porté à 512 o pour TOUS les capteurs (défaut 256 o) :
     // au-delà, publish() abandonne en silence (multi-mesures / batch). Centralisé
     // ici pour ne plus dépendre d'un setBufferSize par sketch. Cf. revue MQTT §4.
-    client.setBufferSize(512);
+    // 1024 o : un paquet multi-capteurs (jusqu'à 12 mesures) dépasse 512 o et
+    // serait abandonné en silence par publish() (cf. audit §F1).
+    client.setBufferSize(1024);
     String clientId = "RAM1-Sensor-";
     clientId += WiFi.macAddress();
     if (client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
@@ -378,7 +385,8 @@ void publishMeasures(PubSubClient& client, const char* topic, const char* measur
     if (timestamp_buffer < 0) {
         return;
     }
-    DynamicJsonDocument doc(1024);
+    // Doc dimensionné pour jusqu'à MAX_MEASURES (12) mesures + timestamp.
+    DynamicJsonDocument doc(1536);
 
     JsonArray array = doc.createNestedArray(MSG_MEASURE);  // crée le []
 
@@ -387,13 +395,16 @@ void publishMeasures(PubSubClient& client, const char* topic, const char* measur
         obj["measureType"] = measureTypes[i];
         obj["value"] = measures[i];
     }
-    
+
     doc[MSG_TIMESTAMP] = timestamp_buffer;
 
-    char json_buffer[512];
+    // Sérialisation DYNAMIQUE (String) : un char[512] tronquait silencieusement
+    // au-delà de ~8 mesures (cf. audit §F1). Le buffer PubSubClient est porté à
+    // 1024 o dans reconnect() pour transporter le paquet complet.
+    String json_buffer;
     serializeJson(doc, json_buffer);
 
-    publishJSONMessage(client, topic, json_buffer, retained);
+    publishJSONMessage(client, topic, json_buffer.c_str(), retained);
 }
 
 void handlePingCommand(PubSubClient& client, const char* topic, const bool& allow_to_publish) {
