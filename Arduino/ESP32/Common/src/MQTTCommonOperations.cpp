@@ -2,6 +2,7 @@
 #include <Preferences.h>
 #include "MQTTCommonOperations.hpp"
 #include <WiFiManager.h>
+#include <HTTPUpdate.h>
 
 /****** 
  * Usage of PROGMEM
@@ -140,6 +141,43 @@ void processWifiManager() {
 
 void setCACertForTLS(WiFiClientSecure& client, const char* certificate) {
     client.setCACert(certificate);
+}
+
+void performOta(const String& url) {
+    if (url.length() == 0) return;
+    Serial.print("[OTA] mise a jour depuis ");
+    Serial.println(url);
+    WiFiClient otaClient;
+    httpUpdate.rebootOnUpdate(true); // reboot automatique après flash réussi
+    t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+    switch (ret) {
+        case HTTP_UPDATE_FAILED:
+            Serial.printf("[OTA] echec (%d): %s\n", httpUpdate.getLastError(),
+                          httpUpdate.getLastErrorString().c_str());
+            break;
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println("[OTA] aucune mise a jour");
+            break;
+        case HTTP_UPDATE_OK:
+            Serial.println("[OTA] succes (reboot)");
+            break;
+    }
+}
+
+void saveMqttCreds(const String& broker, const String& user, const String& pass) {
+    preference.begin("fog", false);
+    if (broker.length()) preference.putString("broker", broker);
+    if (user.length()) preference.putString("username", user);
+    if (pass.length()) preference.putString("password", pass);
+    preference.end();
+}
+
+void saveWifiCreds(const String& ssid, const String& pass) {
+    if (ssid.length() == 0) return;
+    // WiFi.begin persistant : l'ESP mémorise les identifiants -> wm.autoConnect()
+    // les réutilise au prochain démarrage.
+    WiFi.persistent(true);
+    WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
 static unsigned long previousReconnectMillis = 0;

@@ -43,6 +43,29 @@ void SensorRunner::onMqttMessage(char* topic, uint8_t* payload,
 
   if (doc.containsKey(MSG_CMD)) {
     String cmd = doc[MSG_CMD];
+    // ── Commandes de GESTION À DISTANCE (depuis le web server du fog) ──
+    if (cmd == "ota") {
+      performOta(String((const char*)(doc["url"] | "")));
+      return;
+    }
+    if (cmd == "set_mqtt") {
+      saveMqttCreds(String((const char*)(doc["broker"] | "")),
+                    String((const char*)(doc["user"] | "")),
+                    String((const char*)(doc["pass"] | "")));
+      ESP.restart();
+      return;
+    }
+    if (cmd == "set_wifi") {
+      saveWifiCreds(String((const char*)(doc["ssid"] | "")),
+                    String((const char*)(doc["pass"] | "")));
+      ESP.restart();
+      return;
+    }
+    if (cmd == "restart") {
+      ESP.restart();
+      return;
+    }
+    // Sinon : protocole capteur classique (ping/start/stop).
     interactWithReceivedCommand(client, cmd, saved_topic_sensor, allowToPublish);
   } else if (doc.containsKey(MSG_ANS)) {
     String ans = doc[MSG_ANS];

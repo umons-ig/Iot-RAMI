@@ -68,6 +68,13 @@ void setup_wifi();
 void loadSavedSensorsFromNVS();
 void processWifiManager();
 void setCACertForTLS(WiFiClientSecure& client, const char* certificate);
+// ── Gestion à distance (commandes MQTT depuis le fog, cf. docs OTA) ──
+// Met à jour le firmware par OTA HTTP (download + flash + reboot).
+void performOta(const String& url);
+// Persiste de nouveaux identifiants MQTT en NVS (broker/user/pass). Suivi d'un restart.
+void saveMqttCreds(const String& broker, const String& user, const String& pass);
+// Mémorise de nouveaux identifiants WiFi (l'ESP les réutilise au prochain boot).
+void saveWifiCreds(const String& ssid, const String& pass);
 // Mqtt (connexion, command reception and message publication)
 void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt_password, const char* topic);
 void publishJSONMessage(PubSubClient& client, const char* topic, const char* json_buffer, const bool& retained=true);
