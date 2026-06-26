@@ -77,6 +77,8 @@ void saveMqttCreds(const String& broker, const String& user, const String& pass)
 void saveWifiCreds(const String& ssid, const String& pass);
 // Persiste la liste CSV des capteurs sélectionnés (NVS). Prise en compte au reboot.
 void saveSensors(const String& csv);
+// Persiste le nom du capteur (NVS) — définit le topic MQTT <nom>-topic/sensor.
+void saveDeviceName(const String& name);
 // Mqtt (connexion, command reception and message publication)
 void reconnect(PubSubClient& client, const char* mqtt_username, const char* mqtt_password, const char* topic);
 void publishJSONMessage(PubSubClient& client, const char* topic, const char* json_buffer, const bool& retained=true);
