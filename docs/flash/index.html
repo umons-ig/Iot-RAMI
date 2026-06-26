@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAMI · Flash firmware ESP32</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Martian+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #07120d;
+        --panel: #0d1f17;
+        --line: #1c3a2b;
+        --phosphor: #2bf08a;
+        --phosphor-dim: #1c9d5b;
+        --text: #b8d8c8;
+        --muted: #6f9484;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 50% 0%, #0e2a1d 0%, var(--bg) 60%),
+          repeating-linear-gradient(0deg, transparent 0 3px, rgba(43, 240, 138, 0.025) 3px 4px);
+        color: var(--text);
+        font-family: "Martian Mono", ui-monospace, monospace;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .card {
+        width: 100%;
+        max-width: 560px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 2.25rem;
+        box-shadow: 0 0 60px rgba(43, 240, 138, 0.08), inset 0 0 0 1px rgba(43, 240, 138, 0.04);
+      }
+      h1 {
+        font-family: "Big Shoulders Display", sans-serif;
+        font-weight: 800;
+        font-size: 2.4rem;
+        letter-spacing: 0.02em;
+        margin: 0 0 0.25rem;
+        color: var(--phosphor);
+        text-shadow: 0 0 18px rgba(43, 240, 138, 0.45);
+      }
+      .sub { color: var(--muted); font-size: 0.82rem; margin-bottom: 1.75rem; }
+      ol { padding-left: 1.1rem; line-height: 1.9; font-size: 0.9rem; }
+      ol b { color: var(--phosphor-dim); }
+      .install { margin: 1.75rem 0 1rem; text-align: center; }
+      esp-web-install-button {
+        --esp-tools-button-color: #04130c;
+        --esp-tools-button-text-color: var(--phosphor);
+        --esp-tools-button-border-color: var(--phosphor-dim);
+      }
+      .note {
+        margin-top: 1.5rem;
+        padding: 0.9rem 1rem;
+        border-left: 3px solid var(--phosphor-dim);
+        background: rgba(43, 240, 138, 0.05);
+        font-size: 0.78rem;
+        color: var(--muted);
+      }
+      .unsupported { color: #ff8c66; font-size: 0.85rem; }
+      code { color: var(--phosphor); }
+      a { color: var(--phosphor-dim); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>RAMI · FLASH</h1>
+      <div class="sub">Firmware universel ESP32 — flash USB directement depuis le navigateur</div>
+
+      <ol>
+        <li>Branche l'<b>ESP32</b> en USB.</li>
+        <li>Clique sur <b>Installer</b> et choisis le port série.</li>
+        <li>Au 1<sup>er</sup> démarrage, configure <b>WiFi / MQTT / capteurs</b> via le portail captif de l'ESP.</li>
+      </ol>
+
+      <div class="install">
+        <esp-web-install-button manifest="./manifest.json">
+          <button slot="activate" style="
+            font-family: 'Martian Mono', monospace; font-weight: 600;
+            background: #04130c; color: var(--phosphor);
+            border: 1px solid var(--phosphor-dim); border-radius: 8px;
+            padding: 0.7rem 1.4rem; cursor: pointer; font-size: 0.95rem;
+            text-shadow: 0 0 10px rgba(43,240,138,.5);">
+            ⚡ Installer le firmware
+          </button>
+          <span slot="unsupported" class="unsupported">
+            Navigateur non supporté — utilise <b>Chrome</b>, <b>Edge</b> ou <b>Opera</b> (Web Serial API).
+          </span>
+          <span slot="not-allowed" class="unsupported">
+            La page doit être servie en <b>HTTPS</b> (c'est le cas sur GitHub Pages).
+          </span>
+        </esp-web-install-button>
+      </div>
+
+      <div class="note">
+        Flashe toujours la <b>dernière release</b> publiée
+        (<code>releases/latest</code>). Les mises à jour suivantes se font ensuite
+        <b>par OTA</b> via le fog, sans recâbler l'USB.
+      </div>
+    </main>
+
+    <script
+      type="module"
+      src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"
+    ></script>
+  </body>
+</html>
