@@ -37,13 +37,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inclure le factory bin de la dernière release
+      - name: Inclure le factory bin de la dernière release (+ cache-bust par version)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release download --repo "${{ github.repository }}" \
             --pattern "rami-universal-factory.bin" --dir docs/flash --clobber \
             || echo "⚠️ Aucune release avec factory bin — la page se déploiera sans binaire."
+          # Le binaire garde la même URL à chaque release -> le navigateur sert
+          # l'ancien depuis le cache. On injecte ?v=<tag> dans le manifest pour
+          # forcer un téléchargement frais à chaque nouvelle version.
+          TAG=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName || echo "dev")
+          sed -i "s#rami-universal-factory.bin[^\"]*#rami-universal-factory.bin?v=${TAG}#" docs/flash/manifest.json
+          echo "Manifest après cache-bust :"; cat docs/flash/manifest.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
