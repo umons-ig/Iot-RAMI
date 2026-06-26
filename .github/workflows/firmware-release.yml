@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: write # nécessaire pour créer la release + attacher les assets
+  actions: write # nécessaire pour dispatcher pages.yml (redéploiement de la page)
 
 jobs:
   build-and-release:
@@ -65,3 +66,12 @@ jobs:
           files: |
             Arduino/ESP32/RamiFirmware/rami-universal.bin
             Arduino/ESP32/RamiFirmware/rami-universal-factory.bin
+
+      - name: Redéployer la page de flash (Pages) avec le nouveau firmware
+        # Une release créée par GITHUB_TOKEN ne déclenche PAS l'event `release`
+        # d'un autre workflow. On dispatche pages.yml explicitement (workflow_dispatch
+        # EST autorisé via GITHUB_TOKEN) pour que le factory bin + le cache-bust
+        # ?v=<tag> de la page reflètent la nouvelle version.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}"
