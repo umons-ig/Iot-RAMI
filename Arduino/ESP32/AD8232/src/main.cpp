@@ -85,7 +85,10 @@ void loop() {
         sendPing(client, saved_topic_sensor);
     }
 
-    if (currentMillis - previousMillis >= 1000) {
+    // ECG : on échantillonne à la cadence configurée (INTERVAL = 1000/NUMBER_OF_
+    // VALUES_PER_SECOND, soit 10 ms à 100 Hz). Le `>= 1000` codé en dur publiait
+    // à 1 Hz — un ECG inexploitable cliniquement. Cf. revue MQTT/firmware §1.1.
+    if (currentMillis - previousMillis >= INTERVAL) {
         previousMillis = currentMillis;
         if (allow_to_publish) {
             readAndPublishMeasures(client, saved_topic_sensor);

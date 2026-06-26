@@ -71,7 +71,9 @@ void sendStart(PubSubClient& client, const char* topic,const bool& retained=fals
 void sendStop(PubSubClient& client, const char* topic,const bool& retained=false);
 void publishAnswerToServerCommand(PubSubClient& client, const char* topic, const String& answer, const bool& retained=true);
 void publishValue(PubSubClient& client, const char* topic, const float& value, const bool& retained=true);
-void publishMeasures(PubSubClient& client, const char* topic, const char* measureTypes[], const float measures[],int count, const bool& retained=true);
+// retained=false : une mesure ne doit PAS être retenue par le broker (sinon tout
+// abonné, dont le fog au reconnect, reçoit la dernière mesure hors session). §5
+void publishMeasures(PubSubClient& client, const char* topic, const char* measureTypes[], const float measures[],int count, const bool& retained=false);
 void handlePingCommand(PubSubClient& client, const char* topic, const bool& allow_to_publish);
 void handleStartCommand(PubSubClient& client, const char* topic, bool& allow_to_publish);
 void handleStopCommand(PubSubClient& client, const char* topic, bool& allow_to_publish);
