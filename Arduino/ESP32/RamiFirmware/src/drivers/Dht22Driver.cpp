@@ -3,17 +3,21 @@
 #include "Dht22Driver.hpp"
 #include <Arduino.h>
 #include <DHT.h>
+#include "PinConfig.hpp"
 
 #define DHT22_TYPE DHT22
-static DHT dht(DHT22_PIN, DHT22_TYPE);
+static DHT* dht = nullptr;
 
 void Dht22Driver::begin() {
-  dht.begin();
+  int dataPin = getConfiguredPin("dht22", "data", DHT22_PIN);
+  dht = new DHT(dataPin, DHT22_TYPE);
+  dht->begin();
 }
 
 int Dht22Driver::read(SensorMeasure* out, int maxOut) {
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
+  if (!dht) return 0;
+  float humidity = dht->readHumidity();
+  float temperature = dht->readTemperature();
   if (isnan(humidity) || isnan(temperature)) {
     Serial.println("[DHT22] lecture echouee");
     return 0;

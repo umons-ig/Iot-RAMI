@@ -5,11 +5,12 @@
 #ifndef GSR_PIN
 #define GSR_PIN 34
 #endif
-// Réponse électrodermale (GSR) analogique -> gsr (valeur brute ADC).
 class GsrDriver : public ISensor {
 public:
   void begin() override;
   int read(SensorMeasure* out, int maxOut) override;
+private:
+  int gsrPin = GSR_PIN;
 };
 #endif
 #endif

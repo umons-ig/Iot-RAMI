@@ -103,7 +103,9 @@
         <h2>Capteurs</h2>
         <div class="sensors" id="sensorList"></div>
         <button id="applySensors" disabled>Appliquer les capteurs</button>
-        <div class="hint">Les capteurs sélectionnés sont pris en compte après un <b>redémarrage</b>. Branche-les sur leurs pins par défaut.</div>
+        <div id="pinConfig" style="margin-top:1rem"></div>
+        <button id="applyPins" disabled>Appliquer les pins</button>
+        <div class="hint">Capteurs et pins sont pris en compte après un <b>redémarrage</b>. Les pins non renseignées gardent la valeur par défaut. (Les capteurs I²C — bmp280, bh1750, sgp30, mlx90614, max30102 — utilisent le bus I²C standard, pas de pin à régler ici.)</div>
       </div>
 
       <div class="card">
@@ -124,18 +126,34 @@
 
     <script>
       const SENSORS = ["dht22","bmp280","ad8232","hcsr04","mr60bha2","max30102","mlx90614","gsr","pir","bh1750","contact","sgp30"];
+      // Rôles de pins par capteur GPIO (les I²C/UART n'en ont pas ici).
+      const PIN_ROLES = { dht22:["data"], ad8232:["out","lo_plus","lo_minus"], hcsr04:["trig","echo"], gsr:["pin"], pir:["pin"], contact:["pin"] };
       const $ = (id) => document.getElementById(id);
-      let port, writer, reader, liveTimer = null, rxBuffer = "";
+      let port, writer, reader, liveTimer = null, rxBuffer = "", currentPins = {};
 
       // UI capteurs (cases à cocher)
       $("sensorList").innerHTML = SENSORS.map(s =>
         `<label><input type="checkbox" value="${s}"> ${s}</label>`).join("");
 
+      // Champs de pins pour les capteurs GPIO sélectionnés.
+      function renderPins() {
+        const checked = [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value);
+        const html = checked.filter(s => PIN_ROLES[s]).map(s =>
+          `<div style="margin:.35rem 0;font-size:.82rem"><b style="color:var(--phosphor-dim)">${s}</b> ` +
+          PIN_ROLES[s].map(role => {
+            const v = (currentPins[s] && currentPins[s][role] != null) ? currentPins[s][role] : "";
+            return `<label style="display:inline-block;margin:0 .5rem;color:var(--muted)">${role} <input type="text" inputmode="numeric" style="width:60px" id="pin-${s}-${role}" value="${v}"></label>`;
+          }).join("") + `</div>`).join("");
+        $("pinConfig").innerHTML = html || '<span style="font-size:.72rem;color:var(--muted)">Aucun capteur à pins GPIO sélectionné.</span>';
+      }
+      document.querySelectorAll("#sensorList input").forEach(c => c.addEventListener("change", renderPins));
+      renderPins();
+
       function log(msg) { const l = $("log"); l.textContent += msg + "\n"; l.scrollTop = l.scrollHeight; }
       function setConnected(on) {
         $("status").textContent = on ? "connecté" : "déconnecté";
         $("status").className = "status " + (on ? "ok" : "ko");
-        ["disconnect","info","applyWifi","applyMqtt","applySensors","readOnce","readLive","restart"].forEach(id => $(id).disabled = !on);
+        ["disconnect","info","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart"].forEach(id => $(id).disabled = !on);
         $("connect").disabled = on;
       }
 
@@ -160,6 +178,9 @@
           // pré-cocher les capteurs connus
           const active = (msg.sensors||"").split(",").map(s=>s.trim());
           document.querySelectorAll("#sensorList input").forEach(c => c.checked = active.includes(c.value));
+          // pré-remplir les pins connues
+          try { currentPins = JSON.parse(msg.pins || "{}"); } catch { currentPins = {}; }
+          renderPins();
         } else if (msg.resp === "read") {
           $("measures").innerHTML = (msg.measures && msg.measures.length)
             ? msg.measures.map(m => `<span>${m.type}</span><span class="v">${(+m.value).toFixed(2)}</span>`).join("")
@@ -212,6 +233,20 @@
       $("applySensors").onclick = () => {
         const list = [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value).join(",");
         send({ cmd: "set_sensors", sensors: list });
+      };
+      $("applyPins").onclick = () => {
+        const pins = {};
+        [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value)
+          .filter(s => PIN_ROLES[s]).forEach(s => {
+            PIN_ROLES[s].forEach(role => {
+              const el = $(`pin-${s}-${role}`);
+              if (el && el.value.trim() !== "") {
+                pins[s] = pins[s] || {};
+                pins[s][role] = parseInt(el.value, 10);
+              }
+            });
+          });
+        send({ cmd: "set_pins", pins });
       };
       $("readOnce").onclick = () => send({ cmd: "read" });
       $("readLive").onclick = () => {
