@@ -21,6 +21,15 @@
 #ifdef ENABLE_BMP280
 #include "drivers/Bmp280Driver.hpp"
 #endif
+#ifdef ENABLE_AD8232
+#include "drivers/Ad8232Driver.hpp"
+#endif
+#ifdef ENABLE_HCSR04
+#include "drivers/Hcsr04Driver.hpp"
+#endif
+#ifdef ENABLE_MR60BHA2
+#include "drivers/Mr60bha2Driver.hpp"
+#endif
 
 // Paramètres communs (surchargables au build).
 #ifndef MQTT_PORT
@@ -44,6 +53,15 @@ static Dht22Driver dht22Driver;
 #ifdef ENABLE_BMP280
 static Bmp280Driver bmp280Driver;
 #endif
+#ifdef ENABLE_AD8232
+static Ad8232Driver ad8232Driver;
+#endif
+#ifdef ENABLE_HCSR04
+static Hcsr04Driver hcsr04Driver;
+#endif
+#ifdef ENABLE_MR60BHA2
+static Mr60bha2Driver mr60bha2Driver;
+#endif
 
 SensorRunner runner(client, sensors, allow_to_publish, MQTT_PORT, SAMPLE_INTERVAL_MS);
 
@@ -54,6 +72,15 @@ void setup() {
 #endif
 #ifdef ENABLE_BMP280
   sensors.add(&bmp280Driver);
+#endif
+#ifdef ENABLE_AD8232
+  sensors.add(&ad8232Driver);
+#endif
+#ifdef ENABLE_HCSR04
+  sensors.add(&hcsr04Driver);
+#endif
+#ifdef ENABLE_MR60BHA2
+  sensors.add(&mr60bha2Driver);
 #endif
   runner.setup();
 }
