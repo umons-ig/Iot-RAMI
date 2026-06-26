@@ -135,6 +135,10 @@
       const PIN_ROLES = { dht22:["data"], ad8232:["out","lo_plus","lo_minus"], hcsr04:["trig","echo"], gsr:["pin"], pir:["pin"], contact:["pin"] };
       const $ = (id) => document.getElementById(id);
       let port, writer, reader, liveTimer = null, rxBuffer = "", currentPins = {}, gotInfo = false;
+      // Échappe les données venant de l'ESP avant injection dans le DOM (anti-XSS :
+      // le nom du capteur est défini par l'utilisateur et rejoué dans 'info').
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
       // UI capteurs (cases à cocher)
       $("sensorList").innerHTML = SENSORS.map(s =>
@@ -147,7 +151,7 @@
           `<div style="margin:.35rem 0;font-size:.82rem"><b style="color:var(--phosphor-dim)">${s}</b> ` +
           PIN_ROLES[s].map(role => {
             const v = (currentPins[s] && currentPins[s][role] != null) ? currentPins[s][role] : "";
-            return `<label style="display:inline-block;margin:0 .5rem;color:var(--muted)">${role} <input type="text" inputmode="numeric" style="width:60px" id="pin-${s}-${role}" value="${v}"></label>`;
+            return `<label style="display:inline-block;margin:0 .5rem;color:var(--muted)">${role} <input type="text" inputmode="numeric" style="width:60px" id="pin-${s}-${role}" value="${esc(v)}"></label>`;
           }).join("") + `</div>`).join("");
         $("pinConfig").innerHTML = html || '<span style="font-size:.72rem;color:var(--muted)">Aucun capteur à pins GPIO sélectionné.</span>';
       }
@@ -178,9 +182,9 @@
         if (msg.resp === "info") {
           gotInfo = true;
           $("deviceinfo").innerHTML =
-            `nom : <b style="color:var(--phosphor)">${msg.name||"?"}</b><br>` +
-            `capteurs : <b>${msg.sensors||"(aucun)"}</b><br>` +
-            `IP : ${msg.ip||"?"} · WiFi : ${msg.connected ? "✅" : "❌"}`;
+            `nom : <b style="color:var(--phosphor)">${esc(msg.name||"?")}</b><br>` +
+            `capteurs : <b>${esc(msg.sensors||"(aucun)")}</b><br>` +
+            `IP : ${esc(msg.ip||"?")} · WiFi : ${msg.connected ? "✅" : "❌"}`;
           // pré-remplir le nom connu
           if (msg.name && msg.name !== "?" && !$("dname").value) $("dname").value = msg.name;
           // pré-cocher les capteurs connus
@@ -191,7 +195,7 @@
           renderPins();
         } else if (msg.resp === "read") {
           $("measures").innerHTML = (msg.measures && msg.measures.length)
-            ? msg.measures.map(m => `<span>${m.type}</span><span class="v">${(+m.value).toFixed(2)}</span>`).join("")
+            ? msg.measures.map(m => `<span>${esc(m.type)}</span><span class="v">${(+m.value).toFixed(2)}</span>`).join("")
             : '<span style="color:var(--muted)">aucune mesure (capteur inactif ? redémarre après sélection)</span>';
         }
       }
@@ -199,7 +203,7 @@
       async function readLoop() {
         const dec = new TextDecoder();
         try {
-          while (port.readable) {
+          while (port && port.readable) {
             const { value, done } = await reader.read();
             if (done) break;
             rxBuffer += dec.decode(value);
@@ -210,6 +214,7 @@
             }
           }
         } catch (e) { log("⚠️ lecture: " + e.message); }
+        finally { try { reader.releaseLock(); } catch (_) {} } // libère le lock en sortie
       }
 
       $("connect").onclick = async () => {
@@ -226,6 +231,7 @@
           } catch (e) { log("(setSignals non supporté : " + e.message + ")"); }
           writer = port.writable.getWriter();
           reader = port.readable.getReader();
+          rxBuffer = ""; // repart propre (pas de ligne partielle d'une session précédente)
           setConnected(true);
           log("✅ port ouvert (115200) — reset ESP, attente du boot…");
           readLoop();
@@ -240,10 +246,12 @@
       $("disconnect").onclick = async () => {
         try {
           if (liveTimer) { clearInterval(liveTimer); liveTimer = null; $("readLive").textContent = "▶ Live"; }
-          if (reader) { await reader.cancel(); reader.releaseLock(); }
-          if (writer) { writer.releaseLock(); }
+          // reader.cancel() fait sortir readLoop, qui libère le lock dans son finally.
+          if (reader) { try { await reader.cancel(); } catch (_) {} }
+          if (writer) { try { writer.releaseLock(); } catch (_) {} }
           if (port) await port.close();
         } catch (e) { log("⚠️ " + e.message); }
+        reader = writer = port = undefined; // refs propres pour une reconnexion
         setConnected(false); log("port fermé");
       };
 
