@@ -38,6 +38,10 @@ export const BUFFER_CONFIG = {
   flushMaxSize: parseInt(process.env.FLUSH_MAX_SIZE ?? "50"),
   maxBufferSize: parseInt(process.env.MAX_BUFFER_SIZE ?? "500"),
   sessionMaxDurationMs: parseInt(process.env.SESSION_MAX_DURATION_MS ?? "3600000"),
+  // Timeout capteur muet. Le capteur pingue toutes les 20 s ; on vise ≥ 2,5×
+  // l'intervalle pour tolérer la perte d'un ping (jitter WiFi). Avant : 30 s codé
+  // en dur (marge d'une seule perte). Cf. revue MQTT §6.
+  sensorTimeoutMs: parseInt(process.env.SENSOR_TIMEOUT_MS ?? "50000"),
 };
 
 // ─── Postgres local (outbox store-and-forward) ────────────────────────────────
