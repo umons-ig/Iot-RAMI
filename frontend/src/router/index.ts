@@ -100,6 +100,15 @@ const router = createRouter({
 			},
 		},
 		{
+			path: "/zones/:id/monitor",
+			name: "ZoneMonitor",
+			component: () => import("@/views/zone/ZoneMonitorView.vue"),
+			props: true,
+			meta: {
+				requiresAuth: true,
+			},
+		},
+		{
 			path: "/teams",
 			name: "teams",
 			component: () => import("@/views/team/TeamsView.vue"),
