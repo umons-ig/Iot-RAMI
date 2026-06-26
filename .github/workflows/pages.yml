@@ -1,0 +1,53 @@
+name: Deploy Pages
+
+# Déploie le site GitHub Pages (page d'accueil + outil de flash) en y incluant
+# le firmware « factory » de la dernière release, servi DEPUIS LA MÊME ORIGINE
+# que la page. Indispensable : ESP Web Tools télécharge le .bin via fetch(), et
+# les URLs de release GitHub redirigent sans header CORS (donc bloquées si
+# cross-origin). En servant le .bin depuis github.io, plus de problème CORS.
+#
+# Se redéclenche à chaque publication de release -> la page sert toujours la
+# dernière version, sans commiter de binaire dans git.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inclure le factory bin de la dernière release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo "${{ github.repository }}" \
+            --pattern "rami-universal-factory.bin" --dir docs/flash --clobber \
+            || echo "⚠️ Aucune release avec factory bin — la page se déploiera sans binaire."
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

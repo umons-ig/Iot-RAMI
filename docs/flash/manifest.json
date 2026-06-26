@@ -7,7 +7,7 @@
       "chipFamily": "ESP32",
       "parts": [
         {
-          "path": "https://github.com/GaspardMenou/Iot-RAMI/releases/latest/download/rami-universal-factory.bin",
+          "path": "./rami-universal-factory.bin",
           "offset": 0
         }
       ]
