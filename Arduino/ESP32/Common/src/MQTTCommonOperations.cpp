@@ -2,6 +2,7 @@
 #include <Preferences.h>
 #include "MQTTCommonOperations.hpp"
 #include <WiFiManager.h>
+#include <HTTPUpdate.h>
 
 /****** 
  * Usage of PROGMEM
@@ -50,6 +51,8 @@ WiFiManagerParameter broker("broker", "MQTT Broker IP", "192.168.10.4", 40);
 WiFiManagerParameter username("mqtt_user", "MQTT User", "fog1", 40);
 WiFiManagerParameter password("mqtt_password", "MQTT Password", "fog1password", 40);
 WiFiManagerParameter sensor_name("sensor_name", "MQTT Sensor Name", "esp32-bmp280", 40);
+// Sélection des capteurs au runtime (variante A) : liste CSV éditée au portail.
+WiFiManagerParameter sensors_param("sensors", "Capteurs (csv: dht22,bh1750,sgp30)", "", 120);
 Preferences preference;
 bool shouldSaveConfig = false;
 char saved_broker[40];
@@ -59,6 +62,7 @@ char saved_name[40];
 char saved_topic[50];
 char saved_topic_sensor[60];
 char saved_topic_server[60];
+char saved_sensors[120];
 
 /************************************ Function Implementations *************************************/
 void setup_wifi() {
@@ -76,6 +80,7 @@ void setup_wifi() {
     wm.addParameter(&username);
     wm.addParameter(&password);
     wm.addParameter(&sensor_name);
+    wm.addParameter(&sensors_param);
 
 
     preference.begin("fog",true);
@@ -83,6 +88,7 @@ void setup_wifi() {
     preference.getString("username", saved_username,40);
     preference.getString("password", saved_password,40);
     preference.getString("sensor_name", saved_name,40);
+    preference.getString("sensors", saved_sensors,120);
     preference.end();
 
     Serial.println(saved_broker);
@@ -100,6 +106,7 @@ void setup_wifi() {
             preference.putString("username",username.getValue());
             preference.putString("password",password.getValue());
             preference.putString("sensor_name",sensor_name.getValue());
+            preference.putString("sensors", sensors_param.getValue());
             preference.end();
             ESP.restart();
         }
@@ -111,6 +118,12 @@ void setup_wifi() {
     }
 }
 
+void loadSavedSensorsFromNVS() {
+  preference.begin("fog", true);
+  preference.getString("sensors", saved_sensors, 120);
+  preference.end();
+}
+
 void processWifiManager() {
     wm.process();
     if (shouldSaveConfig) {
@@ -120,6 +133,7 @@ void processWifiManager() {
         preference.putString("username", username.getValue());
         preference.putString("password", password.getValue());
         preference.putString("sensor_name", sensor_name.getValue());
+        preference.putString("sensors", sensors_param.getValue());
         preference.end();
         ESP.restart();
     }
@@ -127,6 +141,43 @@ void processWifiManager() {
 
 void setCACertForTLS(WiFiClientSecure& client, const char* certificate) {
     client.setCACert(certificate);
+}
+
+void performOta(const String& url) {
+    if (url.length() == 0) return;
+    Serial.print("[OTA] mise a jour depuis ");
+    Serial.println(url);
+    WiFiClient otaClient;
+    httpUpdate.rebootOnUpdate(true); // reboot automatique après flash réussi
+    t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+    switch (ret) {
+        case HTTP_UPDATE_FAILED:
+            Serial.printf("[OTA] echec (%d): %s\n", httpUpdate.getLastError(),
+                          httpUpdate.getLastErrorString().c_str());
+            break;
+        case HTTP_UPDATE_NO_UPDATES:
+            Serial.println("[OTA] aucune mise a jour");
+            break;
+        case HTTP_UPDATE_OK:
+            Serial.println("[OTA] succes (reboot)");
+            break;
+    }
+}
+
+void saveMqttCreds(const String& broker, const String& user, const String& pass) {
+    preference.begin("fog", false);
+    if (broker.length()) preference.putString("broker", broker);
+    if (user.length()) preference.putString("username", user);
+    if (pass.length()) preference.putString("password", pass);
+    preference.end();
+}
+
+void saveWifiCreds(const String& ssid, const String& pass) {
+    if (ssid.length() == 0) return;
+    // WiFi.begin persistant : l'ESP mémorise les identifiants -> wm.autoConnect()
+    // les réutilise au prochain démarrage.
+    WiFi.persistent(true);
+    WiFi.begin(ssid.c_str(), pass.c_str());
 }
 
 static unsigned long previousReconnectMillis = 0;
