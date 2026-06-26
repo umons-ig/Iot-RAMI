@@ -142,6 +142,12 @@ const useSession = () => {
 	// État de connexion temps réel exposé à l'UI (badge LIVE / RECONNEXION…).
 	// Cf. PLAN_AMELIORATIONS §1.6.
 	const connectionState = ref<"connected" | "reconnecting" | "disconnected">("disconnected")
+	// Gel de l'affichage temps réel : quand `paused`, on cesse d'alimenter le
+	// graphe (le socket continue de tourner) pour inspecter la fenêtre courante.
+	const paused = ref(false)
+	const togglePause = () => {
+		paused.value = !paused.value
+	}
 
 	// **************************************************** METHODS ****************************************************
 	// *************************** [ATTRIBUTE]  LIST OF SESSIONS AND SELECTED SESSION
@@ -311,6 +317,9 @@ const useSession = () => {
 	]
 
 	const updateChart = (label: Date, value: number, measureType: string, maxpoint = 100) => {
+		// Gel : on ignore les nouveaux points tant que l'affichage est en pause
+		// (le flux WebSocket continue, mais le graphe reste figé pour inspection).
+		if (paused.value) return
 		// Mutation IN-PLACE (cf. PLAN_AMELIORATIONS §2.1). L'ancienne version
 		// recopiait tous les labels + tous les datasets ET re-triait tout le
 		// tableau À CHAQUE point (O(n log n) pour rien, les points arrivent déjà
@@ -421,6 +430,9 @@ const useSession = () => {
 		timeSinceLastValue,
 		transmissionSpeed,
 		connectionState,
+		lastMessageTime,
+		paused,
+		togglePause,
 		startSessionOnClientSide,
 		createSessionOnServerSide,
 		checkAndJoinActiveSession,

@@ -3,8 +3,9 @@
 		class="sensor-card"
 		role="button"
 		tabindex="0"
-		:class="[statusClass, { 'sensor-card--selected': isSelected, 'sensor-card--clickable': !isForNavigation || true, 'sensor-card--disabled': isCardDisabled }]"
+		:class="[statusClass, { 'sensor-card--selected': isSelected, 'sensor-card--clickable': true, 'sensor-card--disabled': isCardDisabled }]"
 		:aria-disabled="isCardDisabled"
+		:title="isCardDisabled ? 'Capteur hors ligne — impossible de démarrer une session' : tooltipText"
 		@click="handleCardClick"
 		@keydown.enter="handleCardClick"
 		@keydown.space.prevent="handleCardClick">
