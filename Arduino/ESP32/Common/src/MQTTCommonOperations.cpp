@@ -2,6 +2,13 @@
 #include <Preferences.h>
 #include "MQTTCommonOperations.hpp"
 #include <WiFiManager.h>
+#include <esp_task_wdt.h>
+
+// Watchdog matériel : si loop() se fige (NTP, reconnexion, lib bloquante) plus
+// longtemps que ce délai, l'ESP32 redémarre au lieu de rester zombie. §2 revue.
+static const int WDT_TIMEOUT_S = 15;
+// Throttle de la reconnexion WiFi.
+static unsigned long previousWifiCheckMillis = 0;
 
 /****** 
  * Usage of PROGMEM
@@ -106,13 +113,40 @@ void setup_wifi() {
         Serial.println("Connecté");
         Serial.println(WiFi.localIP());
         wm.startWebPortal(); // Keep config page accessible at http://<esp32-ip>/
+        // Reconnexion WiFi auto en cas de perte (avant : seul MQTT reconnectait).
+        WiFi.setAutoReconnect(true);
+        // Watchdog matériel armé APRÈS la connexion (pour ne pas rebooter pendant
+        // le portail de config). API portable core 2.x / 3.x.
+#if ESP_IDF_VERSION_MAJOR >= 5
+        esp_task_wdt_config_t wdtConfig = {};
+        wdtConfig.timeout_ms = WDT_TIMEOUT_S * 1000;
+        wdtConfig.idle_core_mask = 0;
+        wdtConfig.trigger_panic = true;
+        esp_task_wdt_init(&wdtConfig);
+#else
+        esp_task_wdt_init(WDT_TIMEOUT_S, true);
+#endif
+        esp_task_wdt_add(NULL);
     }else {
         Serial.println("Il y a un pb chef");
     }
 }
 
 void processWifiManager() {
+    // Nourrit le watchdog à chaque itération de loop() (appelé par tous les sketches).
+    esp_task_wdt_reset();
     wm.process();
+    // Reconnexion WiFi proactive (throttle 5 s) : WiFiManager en web portal ne
+    // relance pas la STA tout seul ; sans ça MQTT tentait de se reconnecter sur
+    // une stack sans IP. §2 revue.
+    if (WiFi.status() != WL_CONNECTED) {
+        unsigned long now = millis();
+        if (now - previousWifiCheckMillis >= 5000) {
+            previousWifiCheckMillis = now;
+            Serial.println("[WiFi] Déconnecté — tentative de reconnexion...");
+            WiFi.reconnect();
+        }
+    }
     if (shouldSaveConfig) {
         shouldSaveConfig = false;
         preference.begin("fog", false);
