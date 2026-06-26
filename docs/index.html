@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAMI · IoT médical — UMons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Martian+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #07120d;
+        --panel: #0d1f17;
+        --line: #1c3a2b;
+        --phosphor: #2bf08a;
+        --phosphor-dim: #1c9d5b;
+        --text: #b8d8c8;
+        --muted: #6f9484;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 50% 0%, #0e2a1d 0%, var(--bg) 60%),
+          repeating-linear-gradient(0deg, transparent 0 3px, rgba(43, 240, 138, 0.025) 3px 4px);
+        color: var(--text);
+        font-family: "Martian Mono", ui-monospace, monospace;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .card {
+        width: 100%;
+        max-width: 620px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 2.5rem;
+        box-shadow: 0 0 60px rgba(43, 240, 138, 0.08), inset 0 0 0 1px rgba(43, 240, 138, 0.04);
+      }
+      h1 {
+        font-family: "Big Shoulders Display", sans-serif;
+        font-weight: 800;
+        font-size: 3rem;
+        letter-spacing: 0.02em;
+        margin: 0;
+        color: var(--phosphor);
+        text-shadow: 0 0 22px rgba(43, 240, 138, 0.45);
+      }
+      .tag { color: var(--muted); font-size: 0.85rem; margin: 0.25rem 0 1.75rem; }
+      p { line-height: 1.7; font-size: 0.92rem; }
+      .grid { display: grid; gap: 0.75rem; margin: 1.75rem 0 0.5rem; }
+      a.tile {
+        display: flex; align-items: center; gap: 0.8rem;
+        text-decoration: none; color: var(--text);
+        background: rgba(43, 240, 138, 0.04);
+        border: 1px solid var(--line); border-radius: 10px;
+        padding: 0.9rem 1.1rem; transition: border-color 0.15s, background 0.15s;
+      }
+      a.tile:hover { border-color: var(--phosphor-dim); background: rgba(43, 240, 138, 0.08); }
+      a.tile .ico { font-size: 1.3rem; }
+      a.tile b { color: var(--phosphor); font-weight: 600; }
+      a.tile small { color: var(--muted); display: block; font-size: 0.74rem; margin-top: 2px; }
+      .arrow { margin-left: auto; color: var(--phosphor-dim); }
+      footer { margin-top: 1.75rem; font-size: 0.72rem; color: var(--muted); }
+      footer a { color: var(--phosphor-dim); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>RAMI&nbsp;1.0</h1>
+      <div class="tag">Gestion de capteurs IoT médicaux — Université de Mons</div>
+      <p>
+        Capture, traitement et visualisation temps réel de mesures multi-capteurs
+        (ECG, température, SpO₂, environnement…). Pipeline
+        <b style="color: var(--phosphor-dim)">ESP32 → MQTT → fog → Kafka → backend → Vue 3</b>.
+      </p>
+
+      <div class="grid">
+        <a class="tile" href="./flash/">
+          <span class="ico">⚡</span>
+          <span><b>Flasher un ESP32</b><small>Installation USB depuis le navigateur (Chrome/Edge)</small></span>
+          <span class="arrow">→</span>
+        </a>
+        <a class="tile" href="https://github.com/GaspardMenou/Iot-RAMI">
+          <span class="ico">⌥</span>
+          <span><b>Code source</b><small>Dépôt GitHub du projet</small></span>
+          <span class="arrow">→</span>
+        </a>
+        <a class="tile" href="https://github.com/GaspardMenou/Iot-RAMI/tree/main/docs">
+          <span class="ico">📄</span>
+          <span><b>Documentation technique</b><small>MQTT, Kafka, API, firmware, OTA…</small></span>
+          <span class="arrow">→</span>
+        </a>
+      </div>
+
+      <footer>
+        Firmware universel config-driven · OTA via le fog ·
+        <a href="https://github.com/GaspardMenou/Iot-RAMI/releases/latest">dernière release</a>
+      </footer>
+    </main>
+  </body>
+</html>
