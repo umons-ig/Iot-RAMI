@@ -111,7 +111,14 @@ void setup_wifi() {
     // l'ESP resterait bloqué dans le portail et la console ne répondrait jamais
     // -> impossible de configurer le WiFi depuis la page web. wm.process() (dans
     // processWifiManager) sert le portail à chaque itération.
+    // Piège WiFiManager : autoConnect() BLOQUE dans le portail malgré
+    // setConfigPortalBlocking(false). On empêche donc autoConnect de lancer le
+    // portail (setEnableConfigPortal(false)) -> il tente juste les creds et rend
+    // la main vite ; en cas d'échec on démarre le portail NOUS-MÊMES en non
+    // bloquant (startConfigPortal le respecte vraiment) -> loop() tourne et la
+    // console série répond.
     wm.setConfigPortalBlocking(false);
+    wm.setEnableConfigPortal(false);
     if (wm.autoConnect()) {
         if (shouldSaveConfig) {
             preference.begin("fog", false);
@@ -127,7 +134,8 @@ void setup_wifi() {
         Serial.println(WiFi.localIP());
         wm.startWebPortal(); // page de config accessible à http://<esp32-ip>/
     } else {
-        Serial.println("[WiFi] non connecté — portail captif actif (config via AP ou USB)");
+        Serial.println("[WiFi] non connecté — portail de config (non bloquant)");
+        wm.startConfigPortal("RAMI-Setup"); // non bloquant -> rend la main
     }
     // Reconnexion WiFi auto + watchdog matériel, armés dans TOUS les cas (le
     // watchdog est nourri par processWifiManager à chaque loop). API portable.
