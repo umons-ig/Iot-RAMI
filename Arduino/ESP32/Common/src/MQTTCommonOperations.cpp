@@ -106,37 +106,42 @@ void setup_wifi() {
     snprintf(saved_topic_server, 60, "%s-topic/server", saved_name);
     snprintf(saved_topic_sensor, 60, "%s-topic/sensor", saved_name);
 
-    if(wm.autoConnect()){
-        if(shouldSaveConfig){
-            preference.begin("fog",false);
+    // Portail NON bloquant : loop() doit tourner (console série USB + wm.process)
+    // même sans WiFi configuré. Sinon, après un flash (qui efface la NVS),
+    // l'ESP resterait bloqué dans le portail et la console ne répondrait jamais
+    // -> impossible de configurer le WiFi depuis la page web. wm.process() (dans
+    // processWifiManager) sert le portail à chaque itération.
+    wm.setConfigPortalBlocking(false);
+    if (wm.autoConnect()) {
+        if (shouldSaveConfig) {
+            preference.begin("fog", false);
             preference.putString("broker", broker.getValue());
-            preference.putString("username",username.getValue());
-            preference.putString("password",password.getValue());
-            preference.putString("sensor_name",sensor_name.getValue());
+            preference.putString("username", username.getValue());
+            preference.putString("password", password.getValue());
+            preference.putString("sensor_name", sensor_name.getValue());
             preference.putString("sensors", sensors_param.getValue());
             preference.end();
             ESP.restart();
         }
         Serial.println("Connecté");
         Serial.println(WiFi.localIP());
-        wm.startWebPortal(); // Keep config page accessible at http://<esp32-ip>/
-        // Reconnexion WiFi auto en cas de perte (avant : seul MQTT reconnectait).
-        WiFi.setAutoReconnect(true);
-        // Watchdog matériel armé APRÈS la connexion (pour ne pas rebooter pendant
-        // le portail de config). API portable core 2.x / 3.x.
-#if ESP_IDF_VERSION_MAJOR >= 5
-        esp_task_wdt_config_t wdtConfig = {};
-        wdtConfig.timeout_ms = WDT_TIMEOUT_S * 1000;
-        wdtConfig.idle_core_mask = 0;
-        wdtConfig.trigger_panic = true;
-        esp_task_wdt_init(&wdtConfig);
-#else
-        esp_task_wdt_init(WDT_TIMEOUT_S, true);
-#endif
-        esp_task_wdt_add(NULL);
-    }else {
-        Serial.println("Il y a un pb chef");
+        wm.startWebPortal(); // page de config accessible à http://<esp32-ip>/
+    } else {
+        Serial.println("[WiFi] non connecté — portail captif actif (config via AP ou USB)");
     }
+    // Reconnexion WiFi auto + watchdog matériel, armés dans TOUS les cas (le
+    // watchdog est nourri par processWifiManager à chaque loop). API portable.
+    WiFi.setAutoReconnect(true);
+#if ESP_IDF_VERSION_MAJOR >= 5
+    esp_task_wdt_config_t wdtConfig = {};
+    wdtConfig.timeout_ms = WDT_TIMEOUT_S * 1000;
+    wdtConfig.idle_core_mask = 0;
+    wdtConfig.trigger_panic = true;
+    esp_task_wdt_init(&wdtConfig);
+#else
+    esp_task_wdt_init(WDT_TIMEOUT_S, true);
+#endif
+    esp_task_wdt_add(NULL);
 }
 
 void loadSavedSensorsFromNVS() {
