@@ -1,4 +1,4 @@
-import { TOPICS, COMMANDS, MESSAGE_FIELDS, BUFFER_CONFIG, ZIGBEE_CONFIG } from "../constants";
+import { COMMANDS, MESSAGE_FIELDS, BUFFER_CONFIG, ZIGBEE_CONFIG } from "../constants";
 
 // --- Mocks MQTT ---
 const mqttPublish = jest.fn();
