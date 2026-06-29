@@ -56,6 +56,12 @@ export const FIRMWARE_CONFIG = {
   env: process.env.FIRMWARE_ENV ?? "universal",
   currentVersion: process.env.FIRMWARE_VERSION ?? "v0.0.0",
   pollIntervalMs: parseInt(process.env.FIRMWARE_POLL_INTERVAL_MS ?? "3600000"), // 1 h
+  // Base des binaires servis par GitHub Pages (URL DIRECTE, sans redirection ->
+  // l'ESP la flashe de façon fiable, contrairement aux URLs de release github.com).
+  // OTA URL = <otaBaseUrl>/<tag>/rami-universal.bin
+  otaBaseUrl:
+    process.env.FIRMWARE_OTA_BASE_URL ??
+    "https://gaspardmenou.github.io/Iot-RAMI/flash/versions",
 };
 
 // ─── Intégration Zigbee2MQTT ──────────────────────────────────────────────────

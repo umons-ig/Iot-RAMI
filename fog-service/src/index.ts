@@ -60,9 +60,11 @@ async function main() {
       envName: FIRMWARE_CONFIG.env,
       currentVersion: FIRMWARE_CONFIG.currentVersion,
       intervalMs: FIRMWARE_CONFIG.pollIntervalMs,
-      onUpdateAvailable: (version, url) => {
+      onUpdateAvailable: (version) => {
+        // URL Pages DIRECTE (pas la release github.com qui redirige) -> flash fiable.
+        const url = `${FIRMWARE_CONFIG.otaBaseUrl}/${version}/rami-universal.bin`;
         const sent = fog.broadcastDeviceCommand({ cmd: "ota", url });
-        console.log(`⬆️ [FogService] OTA ${version} diffusée à ${sent} ESP`);
+        console.log(`⬆️ [FogService] OTA ${version} (${url}) diffusée à ${sent} ESP`);
       },
     });
     firmwareUpdater.start();
