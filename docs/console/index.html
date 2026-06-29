@@ -182,6 +182,7 @@
         if (msg.resp === "info") {
           gotInfo = true;
           $("deviceinfo").innerHTML =
+            `version : <b style="color:var(--phosphor)">${esc(msg.version||"?")}</b><br>` +
             `nom : <b style="color:var(--phosphor)">${esc(msg.name||"?")}</b><br>` +
             `capteurs : <b>${esc(msg.sensors||"(aucun)")}</b><br>` +
             `IP : ${esc(msg.ip||"?")} · WiFi : ${msg.connected ? "✅" : "❌"}`;

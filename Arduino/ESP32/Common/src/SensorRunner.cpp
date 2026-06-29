@@ -3,6 +3,7 @@
 #include "SensorRunner.hpp"
 #include "MQTTCommonOperations.hpp"
 #include "PinConfig.hpp"
+#include "Version.hpp"
 
 // Intervalles du protocole (identiques pour tous les capteurs).
 static const long PING_INTERVAL_MS = 20000;
@@ -158,6 +159,7 @@ void SensorRunner::processSerialLine(const String& line) {
   if (cmd == "info") {
     DynamicJsonDocument r(512);
     r["resp"] = "info";
+    r["version"] = FIRMWARE_VERSION;
     r["name"] = saved_name;
     r["sensors"] = saved_sensors;
     r["pins"] = getPinConfigJson();

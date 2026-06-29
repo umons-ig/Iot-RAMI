@@ -36,6 +36,13 @@ jobs:
         # Python importable -> on l'installe explicitement (python -m esptool).
         run: pip install --upgrade platformio "esptool<5"
 
+      - name: Injecter la version (tag) dans le firmware
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          sed -i "s/#define FIRMWARE_VERSION .*/#define FIRMWARE_VERSION \"${TAG}\"/" \
+            Arduino/ESP32/Common/src/Version.hpp
+          grep FIRMWARE_VERSION Arduino/ESP32/Common/src/Version.hpp
+
       - name: Build firmware (env universal)
         working-directory: Arduino/ESP32/RamiFirmware
         run: pio run -e universal
