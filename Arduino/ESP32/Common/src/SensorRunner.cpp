@@ -207,5 +207,11 @@ void SensorRunner::processSerialLine(const String& line) {
     Serial.println("{\"resp\":\"restart\",\"ok\":true}");
     delay(100);
     ESP.restart();
+  } else if (cmd == "ota") {
+    // Mise à jour OTA déclenchée depuis la console (USB) : l'ESP télécharge et
+    // flashe l'app lui-même (garde la config). Bloquant + reboot si succès.
+    Serial.println("{\"resp\":\"ota\",\"ok\":true}");
+    delay(50);
+    performOta(String((const char*)(doc["url"] | "")));
   }
 }
