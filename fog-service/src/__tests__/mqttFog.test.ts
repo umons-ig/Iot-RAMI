@@ -31,7 +31,7 @@ const outboxPurgeSynced = jest.fn().mockResolvedValue(0);
 const outboxClose = jest.fn().mockResolvedValue(undefined);
 
 // Import APRES les mocks
-import MqttFog, { mapZigbeeToMeasures } from "../mqttFog";
+import MqttFog, { mapZigbeeToMeasures, buildHaDiscovery, haNodeId } from "../mqttFog";
 
 // Helper : crée une instance de MqttFog sans passer par getInstance()
 // (qui appellerait connectBroker + KafkaService.getInstance sur le singleton).
@@ -50,6 +50,8 @@ function createFogInstance(): any {
   instance.buffer = new Map();
   instance.knownDevices = new Set();
   instance.deviceVersions = new Map();
+  instance.haExposed = new Set();
+  instance.haPublished = new Map();
   instance.flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   instance.flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   instance.maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -567,5 +569,28 @@ describe("MqttFog — adaptateur Zigbee2MQTT (§4)", () => {
       expect(fog.buffer.has("x/sensor")).toBe(false);
       expect(outboxEnqueue).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("MqttFog — découverte Home Assistant (MQTT Discovery)", () => {
+  it("haNodeId : dérive <name> du topic et nettoie les caractères", () => {
+    expect(haNodeId("esp32-salon/sensor")).toBe("esp32-salon");
+    expect(haNodeId("salon temp/sensor")).toBe("salon_temp");
+  });
+
+  it("buildHaDiscovery : topic homeassistant/.../config + state_topic = topic existant", () => {
+    const { topic, payload } = buildHaDiscovery("esp32-salon/sensor", "temperature");
+    expect(topic).toBe("homeassistant/sensor/esp32-salon/temperature/config");
+    // state_topic pointe sur le topic existant -> pas de republication (anti-boucle)
+    expect(payload.state_topic).toBe("esp32-salon/sensor");
+    expect(payload.unique_id).toBe("rami_esp32-salon_temperature");
+    expect(payload.value_template).toContain("temperature");
+    expect((payload.device as { manufacturer: string }).manufacturer).toBe("RAMI");
+  });
+
+  it("buildHaDiscovery : le state_topic ne finit jamais par /config (pas de réingestion)", () => {
+    const { topic } = buildHaDiscovery("x/sensor", "humidity");
+    expect(topic.startsWith("homeassistant/")).toBe(true);
+    expect(topic.endsWith("/sensor")).toBe(false);
   });
 });

@@ -132,6 +132,8 @@ describe("handleCommand", () => {
     fog = {
       getKnownDevices: () => ["a-topic/sensor", "b-topic/sensor"],
       getDeviceVersions: () => new Map(),
+      getHaExposedTopics: () => new Set<string>(),
+      setHaExposed: jest.fn().mockResolvedValue(undefined),
       publishDeviceCommand: jest.fn(),
       broadcastDeviceCommand: jest.fn().mockReturnValue(2),
       getMetricsSnapshot: jest
