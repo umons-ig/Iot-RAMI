@@ -41,7 +41,11 @@ export const MANAGEMENT_CONFIG = {
   // une IP (ex. WireGuard) seulement avec MGMT_TOKEN défini.
   host: process.env.MGMT_HOST ?? "127.0.0.1",
   // Si défini, header `X-Mgmt-Token` requis sur /api/* (comparaison à temps constant).
+  // Token statique : pratique pour scripts/API.
   token: process.env.MGMT_TOKEN ?? "",
+  // Mot de passe admin défini au démarrage : la console propose un login -> session.
+  // Plus propre qu'un token collé (on ne stocke pas le secret dans le navigateur).
+  password: process.env.MGMT_PASSWORD ?? "",
 };
 
 // ─── Mises à jour firmware (OTA via GitHub Releases — « Watchtower firmware ») ─

@@ -51,6 +51,7 @@ async function main() {
     MANAGEMENT_CONFIG.port,
     MANAGEMENT_CONFIG.token,
     MANAGEMENT_CONFIG.host,
+    MANAGEMENT_CONFIG.password,
   );
   // « Watchtower firmware » : poll GitHub Releases → OTA des ESP (opt-in).
   if (FIRMWARE_CONFIG.enabled) {

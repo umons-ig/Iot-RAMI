@@ -10,19 +10,51 @@
  * Les commandes sont exécutées côté ESP par le SensorRunner (cf. firmware).
  */
 import http from "http";
-import { timingSafeEqual } from "crypto";
+import { timingSafeEqual, randomBytes } from "crypto";
+
+// Comparaison de chaînes à temps constant (longueurs différentes -> false).
+function constantEquals(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
 
 /**
  * Vérifie le token de gestion (header X-Mgmt-Token), en temps constant.
- * Si aucun token n'est configuré -> pas d'auth (le serveur est alors bindé
- * localhost). Logique pure, testable.
+ * Si aucun token n'est configuré -> pas d'auth. Logique pure, testable.
  */
 export function checkToken(provided: string | undefined, expected: string): boolean {
   if (!expected) return true;
   if (!provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return constantEquals(provided, expected);
+}
+
+/**
+ * Autorisation d'une requête /api/*. Auth requise dès qu'un token OU un mot de
+ * passe admin est configuré. Accepte : le token statique (scripts) OU un jeton
+ * de session (issu du login par mot de passe).
+ */
+export function isAuthorized(
+  headerToken: string | undefined,
+  token: string,
+  password: string,
+  sessions: Set<string>,
+): boolean {
+  if (!token && !password) return true; // aucune auth configurée
+  if (!headerToken) return false;
+  if (token && constantEquals(headerToken, token)) return true;
+  return sessions.has(headerToken);
+}
+
+/** Vérifie le mot de passe admin (login). */
+export function verifyPassword(provided: string, expected: string): boolean {
+  if (!expected || !provided) return false;
+  return constantEquals(provided, expected);
+}
+
+/** Génère un jeton de session opaque. */
+export function newSessionToken(): string {
+  return randomBytes(24).toString("hex");
 }
 
 export interface FogMetricsSnapshot {
@@ -135,8 +167,8 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
  li{margin:.25rem 0;} code{color:#7ee787;}
 </style></head><body>
 <h1>RAMI · Gestion des capteurs ESP</h1>
-<div class="card"><strong>Token (si MGMT_TOKEN défini)</strong><br>
- <input id="tok" type="password" size="30"> <button onclick="saveTok()">Enregistrer</button></div>
+<div class="card"><strong>Connexion (mot de passe admin)</strong><br>
+ <input id="tok" type="password" size="30" placeholder="mot de passe ou token"> <button onclick="login()">Connexion</button></div>
 <div class="card"><strong>État du fog</strong>
  <div id="status" style="margin-top:.5rem;line-height:1.8">chargement…</div></div>
 <div class="card"><strong>Capteurs connus</strong><ul id="devs"><li>chargement…</li></ul>
@@ -150,8 +182,16 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <script>
  // Header d'auth (X-Mgmt-Token) sur chaque requête si un token est enregistré.
  function H(extra){const h=Object.assign({},extra||{});const t=localStorage.getItem('mgmtToken');if(t)h['X-Mgmt-Token']=t;return h;}
- function saveTok(){localStorage.setItem('mgmtToken',document.getElementById('tok').value);load();status();}
- document.getElementById('tok').value=localStorage.getItem('mgmtToken')||'';
+ // Login : tente le mot de passe -> jeton de session ; sinon (pas de mot de passe
+ // configuré) on utilise le secret saisi comme token statique.
+ async function login(){
+  const secret=document.getElementById('tok').value;
+  const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:secret})});
+  if(r.ok){const j=await r.json();localStorage.setItem('mgmtToken',j.token);}
+  else{const j=await r.json().catch(()=>({}));
+   if((j.error||'').includes('non configuré')){localStorage.setItem('mgmtToken',secret);}
+   else{alert('Mot de passe invalide');return;}}
+  document.getElementById('tok').value='';load();status();}
  async function load(){const r=await fetch('/api/devices',{headers:H()});const j=await r.json();
   document.getElementById('devs').innerHTML=(j.devices||[]).map(d=>'<li><code>'+d+'</code> '+
    '<button onclick="cmd(\\''+d+'\\',\\'restart\\')">restart</button></li>').join('')||'<li>aucun</li>';}
@@ -174,14 +214,40 @@ export function createManagementServer(
   port: number,
   token = "",
   host = "127.0.0.1",
+  password = "",
 ): http.Server {
+  // Jetons de session émis après login par mot de passe (en mémoire, perdus au
+  // redémarrage du service -> re-login).
+  const sessions = new Set<string>();
+
   const server = http.createServer((req, res) => {
     const url = req.url ?? "/";
-    // Auth sur toutes les routes /api/* si un token est configuré.
-    if (url.startsWith("/api/") &&
-        !checkToken(req.headers["x-mgmt-token"] as string | undefined, token)) {
+    const headerToken = req.headers["x-mgmt-token"] as string | undefined;
+
+    // Login par mot de passe admin -> renvoie un jeton de session (pas d'auth requise).
+    if (req.method === "POST" && url === "/api/login") {
+      let raw = "";
+      req.on("data", (c) => { raw += c; if (raw.length > 4096) req.destroy(); });
+      req.on("end", () => {
+        let pwd = "";
+        try { pwd = String((JSON.parse(raw || "{}") as { password?: unknown }).password ?? ""); } catch { /* ignore */ }
+        if (password && verifyPassword(pwd, password)) {
+          const t = newSessionToken();
+          sessions.add(t);
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ token: t }));
+        } else {
+          res.writeHead(401, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: password ? "mot de passe invalide" : "login par mot de passe non configuré" }));
+        }
+      });
+      return;
+    }
+
+    // Auth sur toutes les routes /api/* (token statique OU session de login).
+    if (url.startsWith("/api/") && !isAuthorized(headerToken, token, password, sessions)) {
       res.writeHead(401, { "content-type": "application/json" });
-      res.end(JSON.stringify({ error: "non autorisé (X-Mgmt-Token)" }));
+      res.end(JSON.stringify({ error: "non autorisé" }));
       return;
     }
     if (req.method === "GET" && url === "/api/devices") {
@@ -238,9 +304,9 @@ export function createManagementServer(
   });
   server.listen(port, host, () => {
     console.log(`🛠️  [management] web server de gestion sur ${host}:${port}`);
-    if (!token && host !== "127.0.0.1" && host !== "localhost") {
+    if (!token && !password && host !== "127.0.0.1" && host !== "localhost") {
       console.warn(
-        "⚠️  [management] EXPOSÉ sans MGMT_TOKEN — définis un token, l'API pilote OTA/WiFi/restart de la flotte.",
+        "⚠️  [management] EXPOSÉ sans MGMT_TOKEN ni MGMT_PASSWORD — l'API pilote OTA/WiFi/restart de la flotte.",
       );
     }
   });
