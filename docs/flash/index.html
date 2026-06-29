@@ -79,20 +79,17 @@
 
       <div class="install">
         <esp-web-install-button id="btnInstall" manifest="./manifest.json?v=2">
-          <button slot="activate" class="btn">⚡ Installer (ESP neuf)</button>
+          <button slot="activate" class="btn">⚡ Installer (image complète)</button>
           <span slot="unsupported" class="unsupported">Navigateur non supporté — <b>Chrome</b>/<b>Edge</b>/<b>Opera</b>.</span>
           <span slot="not-allowed" class="unsupported">La page doit être en <b>HTTPS</b>.</span>
-        </esp-web-install-button>
-        <esp-web-install-button id="btnUpdate" manifest="./manifest-update.json">
-          <button slot="activate" class="btn upd">⬆ Mettre à jour</button>
-          <span slot="unsupported"></span><span slot="not-allowed"></span>
         </esp-web-install-button>
       </div>
 
       <div class="note">
-        <b>Installer (ESP neuf)</b> : écrit l'image complète → <b>efface</b> la config (WiFi/MQTT/capteurs).<br>
-        <b>Mettre à jour</b> : flashe seulement l'app → <b>garde</b> ta config. À utiliser sur un ESP déjà flashé RAMI.<br>
-        Les mises à jour à distance se font aussi par <b>OTA</b> via le fog.
+        Le flash USB écrit l'image complète et <b>efface la config</b> (WiFi/MQTT/capteurs) —
+        c'est normal pour un 1<sup>er</sup> flash. Pour <b>mettre à jour sans rien perdre</b>,
+        utilise l'<b>OTA</b> depuis la <a href="../console/">console</a> (l'ESP se met à jour
+        lui-même par WiFi, la config est conservée).
       </div>
     </main>
 
@@ -108,14 +105,14 @@
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
       let blobUrls = [];
 
-      // Construit un manifest ESP Web Tools (Blob) pour une version + un mode.
-      function buildManifest(tag, mode) {
+      // Construit le manifest d'installation (image COMPLÈTE factory) pour une
+      // version. On ne propose QUE le flash complet en USB : ESP Web Tools efface
+      // toujours, donc un flash « app seule » laisserait l'ESP sans bootloader
+      // (briquage). La mise à jour sans erase se fait par OTA (console).
+      function buildManifest(tag) {
         const dir = FLASH_BASE + "versions/" + encodeURIComponent(tag) + "/";
-        const m = mode === "install"
-          ? { name: "RAMI Firmware (universel)", version: tag, new_install_prompt_erase: true,
-              builds: [{ chipFamily: "ESP32", parts: [{ path: dir + "rami-universal-factory.bin", offset: 0 }] }] }
-          : { name: "RAMI Firmware (mise à jour)", version: tag, new_install_prompt_erase: false,
-              builds: [{ chipFamily: "ESP32", parts: [{ path: dir + "rami-universal.bin", offset: 65536 }] }] };
+        const m = { name: "RAMI Firmware (universel)", version: tag, new_install_prompt_erase: true,
+          builds: [{ chipFamily: "ESP32", parts: [{ path: dir + "rami-universal-factory.bin", offset: 0 }] }] };
         const url = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: "application/json" }));
         blobUrls.push(url);
         return url;
@@ -126,8 +123,7 @@
           v.body && v.body.trim() ? v.body : "(pas de notes de version)";
         blobUrls.forEach(URL.revokeObjectURL);
         blobUrls = [];
-        document.getElementById("btnInstall").setAttribute("manifest", buildManifest(v.tag, "install"));
-        document.getElementById("btnUpdate").setAttribute("manifest", buildManifest(v.tag, "update"));
+        document.getElementById("btnInstall").setAttribute("manifest", buildManifest(v.tag));
       }
 
       (async function init() {

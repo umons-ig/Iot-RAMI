@@ -62,7 +62,6 @@ jobs:
             cp docs/flash/versions/$LATEST/rami-universal*.bin docs/flash/ 2>/dev/null || true
           fi
           sed -i "s#rami-universal-factory.bin[^\"]*#rami-universal-factory.bin?v=${LATEST}#" docs/flash/manifest.json
-          sed -i "s#rami-universal\.bin[^\"]*#rami-universal.bin?v=${LATEST}#" docs/flash/manifest-update.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
