@@ -135,6 +135,8 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
  li{margin:.25rem 0;} code{color:#7ee787;}
 </style></head><body>
 <h1>RAMI · Gestion des capteurs ESP</h1>
+<div class="card"><strong>Token (si MGMT_TOKEN défini)</strong><br>
+ <input id="tok" type="password" size="30"> <button onclick="saveTok()">Enregistrer</button></div>
 <div class="card"><strong>État du fog</strong>
  <div id="status" style="margin-top:.5rem;line-height:1.8">chargement…</div></div>
 <div class="card"><strong>Capteurs connus</strong><ul id="devs"><li>chargement…</li></ul>
@@ -146,15 +148,19 @@ const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
  URL <input id="otaurl" size="40" placeholder="http://fog/fw/universal.bin">
  <button class="warn" onclick="ota()">Mettre à jour</button></div>
 <script>
- async function load(){const r=await fetch('/api/devices');const j=await r.json();
+ // Header d'auth (X-Mgmt-Token) sur chaque requête si un token est enregistré.
+ function H(extra){const h=Object.assign({},extra||{});const t=localStorage.getItem('mgmtToken');if(t)h['X-Mgmt-Token']=t;return h;}
+ function saveTok(){localStorage.setItem('mgmtToken',document.getElementById('tok').value);load();status();}
+ document.getElementById('tok').value=localStorage.getItem('mgmtToken')||'';
+ async function load(){const r=await fetch('/api/devices',{headers:H()});const j=await r.json();
   document.getElementById('devs').innerHTML=(j.devices||[]).map(d=>'<li><code>'+d+'</code> '+
    '<button onclick="cmd(\\''+d+'\\',\\'restart\\')">restart</button></li>').join('')||'<li>aucun</li>';}
- async function cmd(target,c,extra){await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json'},
+ async function cmd(target,c,extra){await fetch('/api/command',{method:'POST',headers:H({'content-type':'application/json'}),
   body:JSON.stringify(Object.assign({target,cmd:c},extra||{}))});}
  function setWifi(){cmd('all','set_wifi',{ssid:ssid.value,pass:pass.value});}
  function ota(){cmd('all','ota',{url:otaurl.value});}
  function dot(ok){return '<span style="color:'+(ok?'#2bf08a':'#ff6b6b')+'">●</span>';}
- async function status(){const r=await fetch('/api/status');const s=await r.json();
+ async function status(){const r=await fetch('/api/status',{headers:H()});const s=await r.json();
   document.getElementById('status').innerHTML=
    dot(s.healthy)+' santé globale &nbsp; '+dot(s.kafkaConnected)+' Kafka<br>'+
    'outbox en attente : <code>'+s.outboxPending+'</code> &nbsp; buffer : <code>'+s.bufferSize+'</code><br>'+
