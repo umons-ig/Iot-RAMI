@@ -37,19 +37,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inclure le factory bin de la dernière release (+ cache-bust par version)
+      - name: Bundler les N dernières versions du firmware + changelogs
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          gh release download --repo "${{ github.repository }}" \
-            --pattern "rami-universal-factory.bin" --dir docs/flash --clobber \
-            || echo "⚠️ Aucune release avec factory bin — la page se déploiera sans binaire."
-          # Le binaire garde la même URL à chaque release -> le navigateur sert
-          # l'ancien depuis le cache. On injecte ?v=<tag> dans le manifest pour
-          # forcer un téléchargement frais à chaque nouvelle version.
-          TAG=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName || echo "dev")
-          sed -i "s#rami-universal-factory.bin[^\"]*#rami-universal-factory.bin?v=${TAG}#" docs/flash/manifest.json
-          echo "Manifest après cache-bust :"; cat docs/flash/manifest.json
+          set -e
+          # Releases (récentes d'abord) qui ont bien nos deux binaires.
+          gh api "repos/$REPO/releases?per_page=8" \
+            --jq '[ .[] | select(([.assets[].name] | index("rami-universal.bin")) and ([.assets[].name] | index("rami-universal-factory.bin"))) | { tag: .tag_name, name: .name, date: .published_at, body: .body } ]' \
+            > docs/flash/versions.json || echo "[]" > docs/flash/versions.json
+          echo "versions.json :"; cat docs/flash/versions.json
+          # Télécharge les binaires de chaque version sous versions/<tag>/.
+          for TAG in $(jq -r '.[].tag' docs/flash/versions.json); do
+            echo "→ $TAG"
+            mkdir -p "docs/flash/versions/$TAG"
+            gh release download "$TAG" --repo "$REPO" \
+              --pattern "rami-universal*.bin" --dir "docs/flash/versions/$TAG" --clobber || true
+          done
+          # Compat : la dernière version alimente aussi les manifests statiques
+          # (fallback de la page) avec cache-bust ?v=<tag>.
+          LATEST=$(jq -r '.[0].tag // "dev"' docs/flash/versions.json)
+          if [ "$LATEST" != "dev" ] && [ -d "docs/flash/versions/$LATEST" ]; then
+            cp docs/flash/versions/$LATEST/rami-universal*.bin docs/flash/ 2>/dev/null || true
+          fi
+          sed -i "s#rami-universal-factory.bin[^\"]*#rami-universal-factory.bin?v=${LATEST}#" docs/flash/manifest.json
+          sed -i "s#rami-universal\.bin[^\"]*#rami-universal.bin?v=${LATEST}#" docs/flash/manifest-update.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
