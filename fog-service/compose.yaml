@@ -70,6 +70,12 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0.20
     restart: always
+    # Génère le fichier de mots de passe depuis MQTT_USERNAME/MQTT_PASSWORD (.env)
+    # au démarrage, puis lance le broker. Évite un 'passwd' manquant -> 'not
+    # authorised' (rc=5). Les ESP et le fog doivent utiliser CES MÊMES identifiants.
+    command: >
+      sh -c "mosquitto_passwd -b -c /mosquitto/config/passwd \"$$MQTT_USERNAME\" \"$$MQTT_PASSWORD\"
+      && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
