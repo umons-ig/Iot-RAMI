@@ -10,13 +10,23 @@
  * Les commandes sont exécutées côté ESP par le SensorRunner (cf. firmware).
  */
 import http from "http";
-import { timingSafeEqual, randomBytes } from "crypto";
+import { timingSafeEqual, createHash } from "crypto";
 
 // Comparaison de chaînes à temps constant (longueurs différentes -> false).
 function constantEquals(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
+}
+
+/**
+ * Jeton de session DÉRIVÉ du mot de passe (sans état serveur) : sha256 d'un sel
+ * fixe + le mot de passe. Stable à travers les redémarrages du fog (contrairement
+ * à un set en mémoire) -> on ne se fait plus déconnecter à chaque restart. Ne
+ * révèle pas le mot de passe.
+ */
+export function sessionTokenFor(password: string): string {
+  return createHash("sha256").update("rami-fog-session::" + password).digest("hex");
 }
 
 /**
@@ -38,23 +48,18 @@ export function isAuthorized(
   headerToken: string | undefined,
   token: string,
   password: string,
-  sessions: Set<string>,
 ): boolean {
   if (!token && !password) return true; // aucune auth configurée
   if (!headerToken) return false;
-  if (token && constantEquals(headerToken, token)) return true;
-  return sessions.has(headerToken);
+  if (token && constantEquals(headerToken, token)) return true; // token statique (scripts)
+  if (password && constantEquals(headerToken, sessionTokenFor(password))) return true; // session
+  return false;
 }
 
 /** Vérifie le mot de passe admin (login). */
 export function verifyPassword(provided: string, expected: string): boolean {
   if (!expected || !provided) return false;
   return constantEquals(provided, expected);
-}
-
-/** Génère un jeton de session opaque. */
-export function newSessionToken(): string {
-  return randomBytes(24).toString("hex");
 }
 
 export interface FogMetricsSnapshot {
@@ -250,8 +255,8 @@ const UI_HTML = `
  .node .name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
  .node .topic{font-size:.66rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:.6rem}
  .node .foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
- .ver{font-size:.66rem;color:#04130c;background:var(--phd);border-radius:20px;padding:.12rem .55rem;font-weight:600}
- .ver.unk{background:#2c3f37;color:var(--muted)}
+ .ver{font-size:.66rem;color:#0a0700;background:var(--phd);border-radius:20px;padding:.12rem .55rem;font-weight:600}
+ .ver.unk{background:var(--line2);color:var(--muted)}
  .node button{padding:.3rem .6rem;font-size:.7rem}
  .empty{color:var(--muted);font-size:.85rem;padding:1rem 0;text-align:center}
 
@@ -413,15 +418,12 @@ export function createManagementServer(
   host = "127.0.0.1",
   password = "",
 ): http.Server {
-  // Jetons de session émis après login par mot de passe (en mémoire, perdus au
-  // redémarrage du service -> re-login).
-  const sessions = new Set<string>();
-
   const server = http.createServer((req, res) => {
     const url = req.url ?? "/";
     const headerToken = req.headers["x-mgmt-token"] as string | undefined;
 
-    // Login par mot de passe admin -> renvoie un jeton de session (pas d'auth requise).
+    // Login par mot de passe admin -> renvoie un jeton DÉRIVÉ (sans état, stable
+    // à travers les redémarrages du fog). Pas d'auth requise sur cette route.
     if (req.method === "POST" && url === "/api/login") {
       let raw = "";
       req.on("data", (c) => { raw += c; if (raw.length > 4096) req.destroy(); });
@@ -429,10 +431,8 @@ export function createManagementServer(
         let pwd = "";
         try { pwd = String((JSON.parse(raw || "{}") as { password?: unknown }).password ?? ""); } catch { /* ignore */ }
         if (password && verifyPassword(pwd, password)) {
-          const t = newSessionToken();
-          sessions.add(t);
           res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify({ token: t }));
+          res.end(JSON.stringify({ token: sessionTokenFor(password) }));
         } else {
           res.writeHead(401, { "content-type": "application/json" });
           res.end(JSON.stringify({ error: password ? "mot de passe invalide" : "login par mot de passe non configuré" }));
@@ -441,8 +441,8 @@ export function createManagementServer(
       return;
     }
 
-    // Auth sur toutes les routes /api/* (token statique OU session de login).
-    if (url.startsWith("/api/") && !isAuthorized(headerToken, token, password, sessions)) {
+    // Auth sur toutes les routes /api/* (token statique OU session dérivée).
+    if (url.startsWith("/api/") && !isAuthorized(headerToken, token, password)) {
       res.writeHead(401, { "content-type": "application/json" });
       res.end(JSON.stringify({ error: "non autorisé" }));
       return;
