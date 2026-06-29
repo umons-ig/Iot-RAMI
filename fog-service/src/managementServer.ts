@@ -175,6 +175,7 @@ const UI_HTML = `
 :root{--bg:var(--color-background);--bg2:var(--color-surface);--panel:color-mix(in srgb,var(--color-surface) 90%,transparent);--line:var(--color-border);--line2:var(--color-border-bright);--ph:var(--color-primary);--phd:var(--color-primary-hover);--text:var(--color-text);--muted:var(--color-text-muted);--ok:var(--color-success);--bad:var(--color-danger);--warn:var(--color-warning);--field:color-mix(in srgb,var(--color-surface) 60%,#000)}
 .themesel{background:var(--field);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem;font-family:inherit;font-size:.72rem;cursor:pointer}
  *{box-sizing:border-box}
+ [hidden]{display:none!important} /* sinon .login{display:flex}/.dash écrasent l'attribut hidden */
  html,body{margin:0;height:100%}
  body{
   background:
