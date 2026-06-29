@@ -34,10 +34,11 @@ services:
       # Métriques Prometheus du fog, à scraper depuis le cloud (idéalement via
       # WireGuard). Restreindre la source au firewall si exposé sur le LAN.
       - "9100:9100"
-      # Console de gestion : exposée UNIQUEMENT sur le localhost du Pi -> accès par
-      # tunnel SSH (ssh -L 9200:localhost:9200 pi@<pi>) puis http://localhost:9200.
-      # + MGMT_TOKEN requis. NE PAS mettre "9200:9200" (exposerait au LAN).
-      - "127.0.0.1:9200:9200"
+      # Console de gestion. Par DÉFAUT sur le localhost du Pi (accès par tunnel SSH :
+      # ssh -L 9200:localhost:9200 pi@<pi>). Pour y accéder depuis le LAN (ex. ton
+      # PC), mettre MGMT_BIND=0.0.0.0 dans le .env -> MGMT_TOKEN OBLIGATOIRE
+      # (l'API pilote toute la flotte) + firewall/WireGuard conseillé.
+      - "${MGMT_BIND:-127.0.0.1}:9200:9200"
     depends_on:
       mosquitto:
         condition: service_started
