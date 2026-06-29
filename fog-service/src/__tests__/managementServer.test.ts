@@ -3,6 +3,8 @@ import {
   handleCommand,
   buildStatus,
   checkToken,
+  isAuthorized,
+  verifyPassword,
   DeviceCommandProvider,
 } from "../managementServer";
 
@@ -16,6 +18,32 @@ describe("checkToken", () => {
     expect(checkToken("mauvais", "secret")).toBe(false);
     expect(checkToken(undefined, "secret")).toBe(false);
     expect(checkToken("secre", "secret")).toBe(false); // longueur différente
+  });
+});
+
+describe("isAuthorized", () => {
+  it("aucune auth configurée -> autorisé", () => {
+    expect(isAuthorized(undefined, "", "", new Set())).toBe(true);
+  });
+  it("token statique : correspondance exacte", () => {
+    expect(isAuthorized("tok", "tok", "", new Set())).toBe(true);
+    expect(isAuthorized("x", "tok", "", new Set())).toBe(false);
+    expect(isAuthorized(undefined, "tok", "", new Set())).toBe(false);
+  });
+  it("session de login : jeton présent dans le set", () => {
+    const s = new Set(["sess1"]);
+    expect(isAuthorized("sess1", "", "pwd", s)).toBe(true);
+    expect(isAuthorized("autre", "", "pwd", s)).toBe(false);
+    expect(isAuthorized(undefined, "", "pwd", s)).toBe(false); // mdp configuré -> auth requise
+  });
+});
+
+describe("verifyPassword", () => {
+  it("vrai seulement si correspondance exacte (et mdp configuré)", () => {
+    expect(verifyPassword("abc", "abc")).toBe(true);
+    expect(verifyPassword("abc", "abcd")).toBe(false);
+    expect(verifyPassword("", "abc")).toBe(false);
+    expect(verifyPassword("abc", "")).toBe(false);
   });
 });
 

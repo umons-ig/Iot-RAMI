@@ -23,7 +23,11 @@ services:
       # header X-Mgmt-Token. À définir dans le .env.
       - MGMT_PORT=9200
       - MGMT_HOST=0.0.0.0
+      # MGMT_PASSWORD : mot de passe admin (login sur la console). MGMT_TOKEN :
+      # secret statique pour scripts/API. Définir au moins l'un des deux dès que
+      # la console est exposée (MGMT_BIND=0.0.0.0).
       - MGMT_TOKEN=${MGMT_TOKEN}
+      - MGMT_PASSWORD=${MGMT_PASSWORD}
       # Auto-OTA firmware via GitHub Releases (« Watchtower firmware »). OPT-IN :
       # désactivé par défaut (en médical, l'OTA automatique doit être explicite).
       - FIRMWARE_OTA_ENABLED=${FIRMWARE_OTA_ENABLED:-false}
