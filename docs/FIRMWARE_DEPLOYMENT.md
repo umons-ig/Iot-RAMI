@@ -30,6 +30,11 @@ Tools / Web Serial — **Chrome/Edge/Opera**, HTTPS).
 Au 1ᵉʳ boot, l'ESP démarre un **portail captif** (AP `RAMI-Setup`, non bloquant)
 pour la config. Maintenir **BOOT/GPIO0** au démarrage réinitialise les réglages.
 
+> **Thèmes** : les pages statiques (flash, console, accueil) et la console de
+> gestion du fog reprennent le **design system du cloud** (variables `--color-*`,
+> polices Big Shoulders + Martian Mono) et offrent un **sélecteur de thème**
+> *ambre* (défaut) / *vert* / *clair*, mémorisé par navigateur.
+
 ## 3. Configurer & tester (console USB)
 
 Page <https://gaspardmenou.github.io/Iot-RAMI/console/> (Web Serial) ↔ console
@@ -69,6 +74,10 @@ OTA/WiFi/MQTT/restart à un ou tous les ESP).
 - **Bind** : `MGMT_BIND` (défaut `127.0.0.1` → tunnel SSH ; `0.0.0.0` → LAN).
 - **Auth** : `MGMT_PASSWORD` (login → session) et/ou `MGMT_TOKEN` (header
   `X-Mgmt-Token`, pour scripts). **Obligatoire** dès que c'est exposé.
+- **Session sans état** : le jeton de login est **dérivé du mot de passe**
+  (`sha256(sel + mot de passe)`), pas stocké en mémoire → il reste valable même
+  quand le conteneur fog redémarre (mises à jour Watchtower) → plus de
+  déconnexion « aléatoire ».
 - Accès localhost : `ssh -L 9200:localhost:9200 pi@<pi>` puis `http://localhost:9200`.
 
 ## 6. CI/CD — release automatique
@@ -93,6 +102,15 @@ servent alors la nouvelle version **automatiquement**.
 | `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | outbox Postgres | `fog` / `fog` / `fog_outbox` |
 
 > `FIRMWARE_VERSION` n'est **plus nécessaire** (le fog suit la version par ESP).
+
+> **Mosquitto** : le broker **génère son fichier de mots de passe** depuis
+> `MQTT_USERNAME`/`MQTT_PASSWORD` au démarrage (compose). Définis-les dans le
+> `.env` avec **les mêmes valeurs que les ESP** (par défaut `fog1`/`fog1password`),
+> sinon le broker refuse l'auth (`rc=5 / not authorised`).
+
+> ⚠️ Après modification du `.env`, **recrée** le conteneur (`docker compose up -d`
+> recrée si l'image/conf change ; sinon `--force-recreate`) — un simple restart ne
+> recharge pas les variables.
 
 ## 8. Sécurité (état)
 
