@@ -49,6 +49,7 @@ function createFogInstance(): any {
   };
   instance.buffer = new Map();
   instance.knownDevices = new Set();
+  instance.deviceVersions = new Map();
   instance.flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   instance.flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   instance.maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -82,6 +83,11 @@ describe("MqttFog — gestion à distance des ESP", () => {
     fog.handleMessageReceivedFromSensor("capteur-A/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
     fog.handleMessageReceivedFromSensor("capteur-B/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
     expect(fog.getKnownDevices().sort()).toEqual(["capteur-A/sensor", "capteur-B/sensor"]);
+  });
+
+  it("enregistre la version rapportée au PING (getDeviceVersions)", () => {
+    fog.handleMessageReceivedFromSensor("capteur-A/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING, version: "v1.2.7" }));
+    expect(fog.getDeviceVersions().get("capteur-A/sensor")).toBe("v1.2.7");
   });
 
   it("publishDeviceCommand publie sur le topic /server", () => {
@@ -122,7 +128,7 @@ describe("MqttFog — handleMessageReceivedFromSensor (routing)", () => {
   it("route PING vers handlePing", () => {
     const spy = jest.spyOn(fog, "handlePing");
     fog.handleMessageReceivedFromSensor("capteur-A/sensor", makeMsg({ [MESSAGE_FIELDS.CMD]: COMMANDS.PING }));
-    expect(spy).toHaveBeenCalledWith("capteur-A/sensor");
+    expect(spy).toHaveBeenCalledWith("capteur-A/sensor", undefined); // version optionnelle
   });
 
   it("route STOP vers handleStop", async () => {

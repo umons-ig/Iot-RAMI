@@ -56,9 +56,14 @@ export function pickFirmwareAsset(
 export interface FirmwareUpdaterOptions {
   repo: string; // "GaspardMenou/Iot-RAMI"
   envName: string; // "universal"
-  currentVersion: string; // version déployée, ex. "v0.0.0"
   intervalMs: number;
-  onUpdateAvailable: (version: string, downloadUrl: string) => void;
+  // Mode RECOMMANDÉ (par appareil) : remonte le tag de la dernière release à
+  // chaque check ; le fog compare ensuite la version de CHAQUE ESP et cible les
+  // appareils en retard. Pas de version à fixer dans le .env.
+  onLatestRelease?: (latestTag: string) => void;
+  // Mode legacy (version unique) : déclenché si latest > currentVersion.
+  currentVersion?: string;
+  onUpdateAvailable?: (version: string, downloadUrl: string) => void;
   // Injectable pour les tests (par défaut : fetch global Node 18+).
   fetchFn?: typeof fetch;
 }
@@ -69,7 +74,7 @@ export class FirmwareUpdater {
   private readonly fetchFn: typeof fetch;
 
   constructor(private readonly opts: FirmwareUpdaterOptions) {
-    this.current = opts.currentVersion;
+    this.current = opts.currentVersion ?? "";
     this.fetchFn = opts.fetchFn ?? fetch;
   }
 
@@ -103,11 +108,10 @@ export class FirmwareUpdater {
     }
   }
 
-  /** Un tick : récupère la dernière release et déclenche l'OTA si plus récente. */
+  /** Un tick : récupère la dernière release et déclenche l'OTA. */
   async check(): Promise<void> {
     const release = await this.fetchLatestRelease();
     if (!release?.tag_name) return;
-    if (!isNewerVersion(release.tag_name, this.current)) return;
 
     const asset = pickFirmwareAsset(release, this.opts.envName);
     if (!asset) {
@@ -116,10 +120,21 @@ export class FirmwareUpdater {
       );
       return;
     }
-    console.log(
-      `⬆️ [firmwareUpdater] nouvelle version ${release.tag_name} (actuelle ${this.current}) → OTA`,
-    );
-    this.current = release.tag_name; // évite de re-déclencher en boucle
-    this.opts.onUpdateAvailable(release.tag_name, asset.browser_download_url);
+
+    // Mode par appareil : on remonte le tag, le fog décide qui mettre à jour.
+    if (this.opts.onLatestRelease) this.opts.onLatestRelease(release.tag_name);
+
+    // Mode legacy (version unique) : OTA si plus récent que currentVersion.
+    if (
+      this.opts.onUpdateAvailable &&
+      this.opts.currentVersion !== undefined &&
+      isNewerVersion(release.tag_name, this.current)
+    ) {
+      console.log(
+        `⬆️ [firmwareUpdater] nouvelle version ${release.tag_name} (actuelle ${this.current}) → OTA`,
+      );
+      this.current = release.tag_name; // évite de re-déclencher en boucle
+      this.opts.onUpdateAvailable(release.tag_name, asset.browser_download_url);
+    }
   }
 }

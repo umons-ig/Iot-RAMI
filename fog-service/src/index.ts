@@ -5,7 +5,7 @@ dotenv.config();
 import MqttFog from "./mqttFog";
 import { startMetricsServer } from "./metricsServer";
 import { createManagementServer } from "./managementServer";
-import { FirmwareUpdater } from "./firmwareUpdater";
+import { FirmwareUpdater, isNewerVersion } from "./firmwareUpdater";
 import { METRICS_CONFIG, MANAGEMENT_CONFIG, FIRMWARE_CONFIG } from "./constants";
 import type { Server } from "http";
 
@@ -58,13 +58,20 @@ async function main() {
     firmwareUpdater = new FirmwareUpdater({
       repo: FIRMWARE_CONFIG.repo,
       envName: FIRMWARE_CONFIG.env,
-      currentVersion: FIRMWARE_CONFIG.currentVersion,
       intervalMs: FIRMWARE_CONFIG.pollIntervalMs,
-      onUpdateAvailable: (version) => {
-        // URL Pages DIRECTE (pas la release github.com qui redirige) -> flash fiable.
-        const url = `${FIRMWARE_CONFIG.otaBaseUrl}/${version}/rami-universal.bin`;
-        const sent = fog.broadcastDeviceCommand({ cmd: "ota", url });
-        console.log(`⬆️ [FogService] OTA ${version} (${url}) diffusée à ${sent} ESP`);
+      // Par appareil : on cible UNIQUEMENT les ESP dont la version rapportée
+      // (via le PING) est plus ancienne que la dernière release. URL Pages
+      // directe (flash fiable). Aucune version à fixer dans le .env.
+      onLatestRelease: (tag) => {
+        let count = 0;
+        for (const [topic, version] of fog.getDeviceVersions()) {
+          if (isNewerVersion(tag, version)) {
+            const url = `${FIRMWARE_CONFIG.otaBaseUrl}/${tag}/rami-universal.bin`;
+            fog.publishDeviceCommand(topic, { cmd: "ota", url });
+            count++;
+          }
+        }
+        if (count > 0) console.log(`⬆️ [FogService] OTA ${tag} → ${count} ESP en retard`);
       },
     });
     firmwareUpdater.start();

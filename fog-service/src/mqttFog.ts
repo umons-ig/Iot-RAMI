@@ -49,6 +49,9 @@ class MqttFog {
   // Topics /sensor des ESP vus au moins une fois (≠ Zigbee). Sert au web server
   // de gestion à pousser des commandes (ota/set_wifi/set_mqtt/restart). §gestion
   private knownDevices = new Set<string>();
+  // Version firmware rapportée par chaque ESP (via le PING). Sert à l'auto-OTA
+  // ciblé : ne mettre à jour que les appareils en retard, sans variable d'env.
+  private deviceVersions = new Map<string, string>();
   private flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   private flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   private maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -235,7 +238,8 @@ class MqttFog {
     this.mqttClient.subscribe("#");
     this.startFlushInterval();
   }
-  private handlePing(topic: string): void {
+  private handlePing(topic: string, version?: string): void {
+    if (version) this.deviceVersions.set(topic, version);
     clearTimeout(this.sensorTimeouts.get(topic));
     const timeout = setTimeout(() => {
       this.sensorTimeouts.delete(topic);
@@ -293,6 +297,11 @@ class MqttFog {
   /** Liste des topics /sensor des ESP vus (pour piloter/cibler les commandes). */
   public getKnownDevices(): string[] {
     return [...this.knownDevices];
+  }
+
+  /** Version firmware rapportée par chaque ESP (topic -> version), via le PING. */
+  public getDeviceVersions(): Map<string, string> {
+    return new Map(this.deviceVersions);
   }
 
   /** Publie une commande de gestion vers le topic /server d'un ESP. */
@@ -479,7 +488,7 @@ class MqttFog {
 
       const parsed = JSON.parse(message.toString());
       if (parsed[MESSAGE_FIELDS.CMD] === COMMANDS.PING) {
-        this.handlePing(topic);
+        this.handlePing(topic, parsed.version);
       } else if (parsed[MESSAGE_FIELDS.CMD] === COMMANDS.START) {
         this.handleStart(topic).catch((e) => console.error("❌ [handleStart]", e));
       } else if (parsed[MESSAGE_FIELDS.CMD] === COMMANDS.STOP) {
