@@ -33,6 +33,46 @@ export const mapZigbeeToMeasures = (
   return measures;
 };
 
+/**
+ * Identifiant « node » Home Assistant dérivé d'un topic capteur `<name>/sensor`
+ * → `<name>` nettoyé (caractères MQTT/HA sûrs uniquement).
+ */
+export const haNodeId = (sensorTopic: string): string =>
+  sensorTopic.replace(/\/sensor$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+
+/**
+ * Construit un message de découverte MQTT Home Assistant pour une mesure d'un
+ * capteur. **Config-only** : le `state_topic` pointe DIRECTEMENT sur le topic
+ * `<name>/sensor` existant (le capteur y publie déjà) → aucune republication
+ * côté fog, donc pas de boucle. Le `value_template` extrait la mesure du payload
+ * RAMI `{ measures:[{measureType,value}] }` et renvoie None si absente (messages
+ * ping/start/stop) → HA conserve la dernière valeur. Unité/device_class viendront
+ * via le contrat `announce` (cf. docs/MQTT_HOMEASSISTANT.md).
+ */
+export const buildHaDiscovery = (
+  sensorTopic: string,
+  measureType: string,
+): { topic: string; payload: Record<string, unknown> } => {
+  const node = haNodeId(sensorTopic);
+  const obj = measureType.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return {
+    topic: `homeassistant/sensor/${node}/${obj}/config`,
+    payload: {
+      name: `${node} ${measureType}`,
+      unique_id: `rami_${node}_${obj}`,
+      state_topic: sensorTopic,
+      value_template:
+        `{% set v = (value_json.measures | default([])) | selectattr('measureType','eq','${measureType}') | map(attribute='value') | list %}{{ v[0] if v else None }}`,
+      device: {
+        identifiers: [`rami_${node}`],
+        name: node,
+        manufacturer: "RAMI",
+        model: "RAMI ESP32",
+      },
+    },
+  };
+};
+
 // Élément bufferisé : un lot de mesures horodaté (timestamp en µs, optionnel
 // pour les sources qui n'en fournissent pas).
 interface BufferedMeasure {
@@ -52,6 +92,10 @@ class MqttFog {
   // Version firmware rapportée par chaque ESP (via le PING). Sert à l'auto-OTA
   // ciblé : ne mettre à jour que les appareils en retard, sans variable d'env.
   private deviceVersions = new Map<string, string>();
+  // Capteurs exposés à Home Assistant (opt-in par capteur, persisté en Postgres).
+  private haExposed = new Set<string>();
+  // measureTypes déjà annoncés à HA par capteur (pour publier 1× et nettoyer).
+  private haPublished = new Map<string, Set<string>>();
   private flushIntervalMs = BUFFER_CONFIG.flushIntervalMs;
   private flushMaxSize = BUFFER_CONFIG.flushMaxSize;
   private maxBufferSize = BUFFER_CONFIG.maxBufferSize;
@@ -83,6 +127,11 @@ class MqttFog {
       // Outbox durable : créée APRÈS Kafka, démarre le réplicateur + la purge.
       MqttFog.instance.outbox = new Outbox();
       await MqttFog.instance.outbox.init();
+      // Intégration HA : recharge les capteurs exposés (persistés) — survit aux
+      // redémarrages. Les configs HA sont retained sur le broker, donc déjà
+      // connues de HA ; on les republie paresseusement à la prochaine mesure.
+      await MqttFog.instance.outbox.initHaExposed();
+      MqttFog.instance.haExposed = new Set(await MqttFog.instance.outbox.loadHaExposed());
       MqttFog.instance.startReplicator();
       MqttFog.instance.startPurge();
     }
@@ -322,7 +371,61 @@ class MqttFog {
     }
     return count;
   }
+  /** Topics capteurs actuellement exposés à Home Assistant. */
+  public getHaExposedTopics(): Set<string> {
+    return new Set(this.haExposed);
+  }
+
+  /**
+   * Active/désactive l'exposition d'un capteur à Home Assistant (opt-in par
+   * capteur). ON : les configs discovery seront publiées (retained) à la
+   * prochaine mesure. OFF : on efface les configs retained (payload vide → HA
+   * supprime les entités). Persisté en Postgres.
+   */
+  public async setHaExposed(sensorTopic: string, enabled: boolean): Promise<void> {
+    await this.outbox.setHaExposed(sensorTopic, enabled);
+    if (enabled) {
+      this.haExposed.add(sensorTopic);
+    } else {
+      this.haExposed.delete(sensorTopic);
+      const measures = this.haPublished.get(sensorTopic);
+      if (measures) {
+        for (const m of measures) this.clearHaConfig(sensorTopic, m);
+        this.haPublished.delete(sensorTopic);
+      }
+    }
+  }
+
+  /** Publie (1× par measureType) les configs discovery HA d'un capteur exposé. */
+  private maybePublishHaConfigs(sensorTopic: string, measures: unknown): void {
+    if (!this.haExposed.has(sensorTopic) || !Array.isArray(measures)) return;
+    let published = this.haPublished.get(sensorTopic);
+    if (!published) {
+      published = new Set();
+      this.haPublished.set(sensorTopic, published);
+    }
+    for (const m of measures) {
+      const type = (m as { measureType?: unknown })?.measureType;
+      if (typeof type === "string" && type && !published.has(type)) {
+        this.publishHaConfig(sensorTopic, type);
+        published.add(type);
+      }
+    }
+  }
+
+  private publishHaConfig(sensorTopic: string, measureType: string): void {
+    const { topic, payload } = buildHaDiscovery(sensorTopic, measureType);
+    this.mqttClient.publish(topic, JSON.stringify(payload), { retain: true });
+  }
+
+  private clearHaConfig(sensorTopic: string, measureType: string): void {
+    const { topic } = buildHaDiscovery(sensorTopic, measureType);
+    this.mqttClient.publish(topic, "", { retain: true }); // payload vide → HA retire l'entité
+  }
+
   private handleMeasurement(topic: string, data: BufferedMeasure): void {
+    // Intégration HA : si le capteur est exposé, annoncer ses mesures à HA.
+    if (this.haExposed.has(topic)) this.maybePublishHaConfigs(topic, data.measures);
     if (!this.buffer.has(topic)) {
       console.warn(`⚠️ [handleMeasurement] Mesures reçues sans session active pour: ${topic} — ignorées`);
       return;
@@ -469,6 +572,9 @@ class MqttFog {
     message: Buffer,
   ): void {
     try {
+      // Nos propres topics de découverte HA (homeassistant/.../config) : on ne
+      // les réingère jamais (anti-boucle, on est abonné à #).
+      if (topic.startsWith("homeassistant/")) return;
       // Voie Zigbee : topics zigbee2mqtt/<device> (on ignore zigbee2mqtt/bridge/*).
       if (topic.startsWith(this.zigbeeTopicPrefix)) {
         if (!topic.startsWith(`${this.zigbeeTopicPrefix}bridge`)) {

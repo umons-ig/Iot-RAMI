@@ -152,6 +152,37 @@ export class Outbox {
     }
   }
 
+  // ─── Intégration Home Assistant : capteurs exposés (opt-in par capteur) ───────
+  // Persisté ici (Postgres) pour survivre aux redémarrages du conteneur fog.
+
+  /** Crée la table `ha_exposed` si absente. Idempotent. */
+  public async initHaExposed(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS ha_exposed (
+        topic TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+  }
+
+  /** Liste des topics capteurs actuellement exposés à Home Assistant. */
+  public async loadHaExposed(): Promise<string[]> {
+    const result = await this.pool.query(`SELECT topic FROM ha_exposed`);
+    return result.rows.map((row: { topic: string }) => row.topic);
+  }
+
+  /** Active/désactive l'exposition HA d'un capteur (persisté). */
+  public async setHaExposed(topic: string, enabled: boolean): Promise<void> {
+    if (enabled) {
+      await this.pool.query(
+        `INSERT INTO ha_exposed (topic) VALUES ($1) ON CONFLICT (topic) DO NOTHING`,
+        [topic],
+      );
+    } else {
+      await this.pool.query(`DELETE FROM ha_exposed WHERE topic = $1`, [topic]);
+    }
+  }
+
   /**
    * Ferme proprement le pool de connexions.
    */

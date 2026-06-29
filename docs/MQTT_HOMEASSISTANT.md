@@ -1,8 +1,19 @@
 # Conception — Standardisation MQTT & intégration Home Assistant
 
-> Document de conception (non encore implémenté). Objectif : standardiser les paquets/topics MQTT
+> Document de conception. Objectif : standardiser les paquets/topics MQTT
 > (à la manière de `zigbee2mqtt`) pour ajouter des capteurs — y compris **non-médicaux** — en
 > quelques minutes, et permettre une intégration **Home Assistant** par auto-découverte.
+
+> **✅ Implémenté (MVP)** : exposition à Home Assistant **par capteur** (toggle « Exposer à
+> Home Assistant » sur chaque carte de la console de gestion du fog, `:9200`). Mécanisme :
+> **MQTT Discovery config-only** — le fog publie `homeassistant/sensor/<node>/<measure>/config`
+> (retained) dont le `state_topic` pointe **directement** sur le `<name>/sensor` existant (aucune
+> republication → **pas de boucle** ; le routeur ignore `homeassistant/#`). Opt-in par capteur =
+> garde-fou médical (rien n'est exposé sans choix explicite). État **persisté** (table
+> `ha_exposed`, Postgres du fog) → survit aux redémarrages. Les **appareils Zigbee** ne sont PAS
+> concernés (ils ont leur propre découverte HA via Z2M → pas de doublon). Côté HA : juste
+> l'intégration MQTT pointée sur le Mosquitto du fog, rien à installer.
+> **Reste à faire** : unités / `device_class` / plages via le contrat `announce` (§2.2).
 
 ## 1. Problème actuel
 

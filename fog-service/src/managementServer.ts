@@ -72,6 +72,8 @@ export interface FogMetricsSnapshot {
 export interface DeviceCommandProvider {
   getKnownDevices(): string[];
   getDeviceVersions(): Map<string, string>;
+  getHaExposedTopics(): Set<string>;
+  setHaExposed(sensorTopic: string, enabled: boolean): Promise<void>;
   publishDeviceCommand(sensorTopic: string, payload: Record<string, unknown>): void;
   broadcastDeviceCommand(payload: Record<string, unknown>): number;
   getMetricsSnapshot(): Promise<FogMetricsSnapshot>;
@@ -256,6 +258,8 @@ const UI_HTML = `
  .node .name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
  .node .topic{font-size:.66rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:.6rem}
  .node .foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+ .node .ha{display:flex;align-items:center;gap:.45rem;margin-top:.6rem;padding-top:.55rem;border-top:1px solid var(--line);font-size:.68rem;color:var(--muted);cursor:pointer;user-select:none}
+ .node .ha input{accent-color:var(--ph);width:14px;height:14px;cursor:pointer;flex:none}
  .ver{font-size:.66rem;color:#0a0700;background:var(--phd);border-radius:20px;padding:.12rem .55rem;font-weight:600}
  .ver.unk{background:var(--line2);color:var(--muted)}
  .node button{padding:.3rem .6rem;font-size:.7rem}
@@ -389,8 +393,17 @@ const UI_HTML = `
    return '<div class="node" style="animation-delay:'+(i*0.04)+'s">'+
     '<div class="top"><span class="online"></span><span class="name">'+esc(nodeName(x.topic))+'</span></div>'+
     '<div class="topic">'+esc(x.topic)+'</div>'+
-    '<div class="foot">'+v+'<button class="restart-dev" data-topic="'+esc(x.topic)+'">⟳ restart</button></div></div>';
+    '<div class="foot">'+v+'<button class="restart-dev" data-topic="'+esc(x.topic)+'">⟳ restart</button></div>'+
+    '<label class="ha"><input type="checkbox" class="ha-dev" data-topic="'+esc(x.topic)+'"'+(x.haExposed?' checked':'')+'><span>Exposer à Home Assistant</span></label>'+
+    '</div>';
   }).join('');
+ }
+ async function haToggle(topic,enabled,el){
+  var r=await fetch('/api/ha',{method:'POST',headers:H({'content-type':'application/json'}),body:JSON.stringify({topic:topic,enabled:enabled})});
+  if(r.status===401){toast('Session expirée',1);logout();return}
+  var j=await r.json().catch(function(){return{}});
+  if(j.ok)toast(enabled?'✓ exposé à Home Assistant':'✓ retiré de Home Assistant');
+  else{toast('✗ '+(j.error||'erreur'),1);if(el)el.checked=!enabled}
  }
  function refresh(){loadStatus();loadDevices()}
  async function init(){var ok=await loadStatus();view(ok);if(ok)loadDevices()}
@@ -400,6 +413,7 @@ const UI_HTML = `
  $('#pwd').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
  $('#logout').addEventListener('click',logout);
  $('#fleet').addEventListener('click',function(e){var b=e.target.closest('.restart-dev');if(b)cmd(b.dataset.topic,'restart')});
+ $('#fleet').addEventListener('change',function(e){var c=e.target.closest('.ha-dev');if(c)haToggle(c.dataset.topic,c.checked,c)});
  document.addEventListener('click',function(e){
   var b=e.target.closest('[data-act]');if(!b)return;var a=b.dataset.act;
   if(a==='wifi'){if(!$('#ssid').value)return toast('SSID requis',1);cmd('all','set_wifi',{ssid:$('#ssid').value,pass:$('#wpass').value})}
@@ -450,9 +464,14 @@ export function createManagementServer(
     }
     if (req.method === "GET" && url === "/api/devices") {
       const versions = fog.getDeviceVersions();
+      const exposed = fog.getHaExposedTopics();
       const devices = fog
         .getKnownDevices()
-        .map((topic) => ({ topic, version: versions.get(topic) ?? "?" }));
+        .map((topic) => ({
+          topic,
+          version: versions.get(topic) ?? "?",
+          haExposed: exposed.has(topic),
+        }));
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ devices }));
       return;
@@ -493,6 +512,43 @@ export function createManagementServer(
         const { status, body } = handleCommand(fog, parsed);
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(body));
+      });
+      return;
+    }
+    // Exposition d'un capteur à Home Assistant (toggle par capteur).
+    if (req.method === "POST" && url === "/api/ha") {
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 4096) req.destroy();
+      });
+      req.on("end", () => {
+        let topic = "";
+        let enabled = false;
+        try {
+          const b = JSON.parse(raw || "{}") as { topic?: unknown; enabled?: unknown };
+          topic = String(b.topic ?? "");
+          enabled = Boolean(b.enabled);
+        } catch {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "JSON invalide" }));
+          return;
+        }
+        if (!topic) {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "topic requis" }));
+          return;
+        }
+        fog
+          .setHaExposed(topic, enabled)
+          .then(() => {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(JSON.stringify({ ok: true, topic, enabled }));
+          })
+          .catch((e) => {
+            res.writeHead(500, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: String(e) }));
+          });
       });
       return;
     }
