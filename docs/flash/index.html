@@ -10,59 +10,62 @@
       rel="stylesheet"
     />
     <style>
-      :root {
-        --bg: #07120d; --panel: #0d1f17; --line: #1c3a2b;
-        --phosphor: #2bf08a; --phosphor-dim: #1c9d5b; --text: #b8d8c8; --muted: #6f9484;
-      }
+      :root{--color-background:#070600;--color-surface:#0f0c00;--color-surface-secondary:#181300;--color-primary:#ff9f0a;--color-primary-hover:#e08c00;--color-primary-glow:rgba(255,159,10,.18);--color-text:#f0d89a;--color-text-muted:#7a6535;--color-border:#241c00;--color-border-bright:#3a2e00;--color-success:#39ff14;--color-danger:#ff4040;--color-warning:#ffcc00}
+:root[data-theme=green]{--color-background:#000a02;--color-surface:#021004;--color-surface-secondary:#04190a;--color-primary:#39ff6e;--color-primary-hover:#28e85a;--color-primary-glow:rgba(57,255,110,.2);--color-text:#b6ffce;--color-text-muted:#2f8f46;--color-border:#093a17;--color-border-bright:#0e5a24;--color-success:#39ff14;--color-danger:#ff5a5a;--color-warning:#d8ff00}
+:root[data-theme=light]{color-scheme:light;--color-background:#f2ead8;--color-surface:#ede3cc;--color-surface-secondary:#e5d9bc;--color-primary:#b86e00;--color-primary-hover:#9a5c00;--color-primary-glow:rgba(184,110,0,.22);--color-text:#1a1200;--color-text-muted:#7a6030;--color-border:#c8b896;--color-border-bright:#b0996e;--color-success:#1a8a00;--color-danger:#cc2200;--color-warning:#b88000}
+:root{--bg:var(--color-background);--panel:var(--color-surface);--line:var(--color-border);--line2:var(--color-border-bright);--phosphor:var(--color-primary);--phosphor-dim:var(--color-primary-hover);--ph:var(--color-primary);--phd:var(--color-primary-hover);--text:var(--color-text);--muted:var(--color-text-muted);--ok:var(--color-success);--bad:var(--color-danger);--warn:var(--color-warning);--field:color-mix(in srgb,var(--color-surface) 60%,#000)}
+.theme-switch{position:fixed;top:.8rem;right:.8rem;z-index:80}
+.theme-switch select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem;font-family:inherit;font-size:.72rem;cursor:pointer}
       * { box-sizing: border-box; }
       body {
         margin: 0; min-height: 100vh;
         background:
-          radial-gradient(circle at 50% 0%, #0e2a1d 0%, var(--bg) 60%),
-          repeating-linear-gradient(0deg, transparent 0 3px, rgba(43, 240, 138, 0.025) 3px 4px);
+          radial-gradient(circle at 50% 0%, var(--color-surface-secondary) 0%, var(--bg) 60%),
+          repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb,var(--color-primary) 2.5%,transparent) 3px 4px);
         color: var(--text); font-family: "Martian Mono", ui-monospace, monospace;
         display: flex; align-items: center; justify-content: center; padding: 2rem;
       }
       .card {
         width: 100%; max-width: 580px; background: var(--panel);
         border: 1px solid var(--line); border-radius: 14px; padding: 2.25rem;
-        box-shadow: 0 0 60px rgba(43, 240, 138, 0.08), inset 0 0 0 1px rgba(43, 240, 138, 0.04);
+        box-shadow: 0 0 60px color-mix(in srgb,var(--color-primary) 8%,transparent), inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 4%,transparent);
       }
       h1 {
         font-family: "Big Shoulders Display", sans-serif; font-weight: 800; font-size: 2.4rem;
         letter-spacing: 0.02em; margin: 0 0 0.25rem; color: var(--phosphor);
-        text-shadow: 0 0 18px rgba(43, 240, 138, 0.45);
+        text-shadow: 0 0 18px color-mix(in srgb,var(--color-primary) 45%,transparent);
       }
       .sub { color: var(--muted); font-size: 0.82rem; margin-bottom: 1.5rem; }
       ol { padding-left: 1.1rem; line-height: 1.9; font-size: 0.9rem; margin: 0 0 1.25rem; }
       ol b { color: var(--phosphor-dim); }
       .lbl { display: block; font-size: 0.72rem; color: var(--muted); margin: 0.6rem 0 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; }
       select {
-        width: 100%; background: #04130c; color: var(--text); border: 1px solid var(--line);
+        width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--line);
         border-radius: 8px; padding: 0.55rem 0.6rem; font: inherit; font-size: 0.9rem;
       }
       .changelog {
         margin-top: 0.7rem; max-height: 150px; overflow: auto; white-space: pre-wrap;
-        background: #04130c; border: 1px solid var(--line); border-radius: 8px;
+        background: var(--field); border: 1px solid var(--line); border-radius: 8px;
         padding: 0.7rem 0.8rem; font-size: 0.74rem; color: var(--muted); line-height: 1.5;
       }
       .install { margin: 1.5rem 0 0.5rem; display: flex; gap: 0.7rem; flex-wrap: wrap; }
       .btn {
         font-family: "Martian Mono", monospace; font-weight: 600; font-size: 0.9rem; cursor: pointer;
-        background: #04130c; color: var(--phosphor); border: 1px solid var(--phosphor-dim);
-        border-radius: 8px; padding: 0.7rem 1.2rem; text-shadow: 0 0 10px rgba(43,240,138,.5);
+        background: var(--field); color: var(--phosphor); border: 1px solid var(--phosphor-dim);
+        border-radius: 8px; padding: 0.7rem 1.2rem; text-shadow: 0 0 10px color-mix(in srgb,var(--color-primary) 50%,transparent);
       }
-      .btn.upd { color: #04130c; background: var(--phosphor-dim); border-color: var(--phosphor); text-shadow: none; }
+      .btn.upd { color: var(--field); background: var(--phosphor-dim); border-color: var(--phosphor); text-shadow: none; }
       .note {
         margin-top: 1.4rem; padding: 0.9rem 1rem; border-left: 3px solid var(--phosphor-dim);
-        background: rgba(43, 240, 138, 0.05); font-size: 0.76rem; color: var(--muted); line-height: 1.6;
+        background: color-mix(in srgb,var(--color-primary) 5%,transparent); font-size: 0.76rem; color: var(--muted); line-height: 1.6;
       }
       .note b { color: var(--phosphor-dim); }
-      .unsupported { color: #ff8c66; font-size: 0.82rem; }
+      .unsupported { color: var(--color-danger); font-size: 0.82rem; }
       code { color: var(--phosphor); } a { color: var(--phosphor-dim); }
     </style>
   </head>
   <body>
+<div class="theme-switch"><select id="theme" aria-label="Theme"><option value="amber">Ambre</option><option value="green">Vert</option><option value="light">Clair</option></select></div>
     <main class="card">
       <h1>RAMI · FLASH</h1>
       <div class="sub">Firmware universel ESP32 — flash USB directement depuis le navigateur</div>
@@ -146,5 +149,6 @@
         }
       })();
     </script>
-  </body>
+  <script>(function(){var k='ramiTheme';var t=localStorage.getItem(k)||'amber';document.documentElement.dataset.theme=t;var s=document.getElementById('theme');if(s){s.value=t;s.onchange=function(){localStorage.setItem(k,s.value);document.documentElement.dataset.theme=s.value}}})();</script>
+</body>
 </html>
