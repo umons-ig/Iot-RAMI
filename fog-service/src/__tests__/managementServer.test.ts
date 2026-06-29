@@ -5,6 +5,7 @@ import {
   checkToken,
   isAuthorized,
   verifyPassword,
+  sessionTokenFor,
   DeviceCommandProvider,
 } from "../managementServer";
 
@@ -23,18 +24,20 @@ describe("checkToken", () => {
 
 describe("isAuthorized", () => {
   it("aucune auth configurée -> autorisé", () => {
-    expect(isAuthorized(undefined, "", "", new Set())).toBe(true);
+    expect(isAuthorized(undefined, "", "")).toBe(true);
   });
   it("token statique : correspondance exacte", () => {
-    expect(isAuthorized("tok", "tok", "", new Set())).toBe(true);
-    expect(isAuthorized("x", "tok", "", new Set())).toBe(false);
-    expect(isAuthorized(undefined, "tok", "", new Set())).toBe(false);
+    expect(isAuthorized("tok", "tok", "")).toBe(true);
+    expect(isAuthorized("x", "tok", "")).toBe(false);
+    expect(isAuthorized(undefined, "tok", "")).toBe(false);
   });
-  it("session de login : jeton présent dans le set", () => {
-    const s = new Set(["sess1"]);
-    expect(isAuthorized("sess1", "", "pwd", s)).toBe(true);
-    expect(isAuthorized("autre", "", "pwd", s)).toBe(false);
-    expect(isAuthorized(undefined, "", "pwd", s)).toBe(false); // mdp configuré -> auth requise
+  it("jeton dérivé du mot de passe (stable sans état)", () => {
+    const t = sessionTokenFor("pwd");
+    expect(isAuthorized(t, "", "pwd")).toBe(true);
+    expect(isAuthorized("autre", "", "pwd")).toBe(false);
+    expect(isAuthorized(undefined, "", "pwd")).toBe(false); // mdp configuré -> auth requise
+    // Le jeton est déterministe -> identique à travers les redémarrages.
+    expect(sessionTokenFor("pwd")).toBe(t);
   });
 });
 
