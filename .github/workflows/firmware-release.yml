@@ -70,6 +70,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true # changelog auto (PRs depuis la version précédente)
           files: |
             Arduino/ESP32/RamiFirmware/rami-universal.bin
             Arduino/ESP32/RamiFirmware/rami-universal-factory.bin
