@@ -198,9 +198,18 @@ void performOta(const String& url) {
     // du watchdog (15 s) sur lien lent -> reset en plein flash. On retire la tâche
     // du watchdog le temps de l'OTA (cf. audit §F5). Sur échec, on la ré-arme.
     esp_task_wdt_delete(NULL);
-    WiFiClient otaClient;
     httpUpdate.rebootOnUpdate(true); // reboot automatique après flash réussi
-    t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+    t_httpUpdate_return ret;
+    if (url.startsWith("https")) {
+        // HTTPS (ex. binaires GitHub Pages). setInsecure : pas de validation de
+        // certificat pour l'instant (durcissement : bundle CA + signature § audit).
+        WiFiClientSecure secure;
+        secure.setInsecure();
+        ret = httpUpdate.update(secure, url);
+    } else {
+        WiFiClient plain;
+        ret = httpUpdate.update(plain, url);
+    }
     switch (ret) {
         case HTTP_UPDATE_FAILED:
             Serial.printf("[OTA] echec (%d): %s\n", httpUpdate.getLastError(),

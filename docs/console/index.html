@@ -124,6 +124,16 @@
       </div>
 
       <div class="card">
+        <h2>Mise à jour firmware (OTA)</h2>
+        <label>Version</label>
+        <select id="otaVersion"><option>chargement…</option></select>
+        <div class="row" style="margin-top:.6rem">
+          <button id="otaUpdate" disabled>⬆ Mettre à jour par OTA</button>
+        </div>
+        <div class="hint">L'ESP (déjà sur WiFi) télécharge et flashe lui-même la nouvelle app → <b>garde</b> WiFi/MQTT/capteurs/pins. Il redémarre (la connexion série se coupe). Nécessite <code>WiFi : ✅</code>.</div>
+      </div>
+
+      <div class="card">
         <h2>Journal série</h2>
         <div id="log"></div>
       </div>
@@ -162,7 +172,7 @@
       function setConnected(on) {
         $("status").textContent = on ? "connecté" : "déconnecté";
         $("status").className = "status " + (on ? "ok" : "ko");
-        ["disconnect","info","applyName","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart"].forEach(id => $(id).disabled = !on);
+        ["disconnect","info","applyName","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart","otaUpdate"].forEach(id => $(id).disabled = !on);
         $("connect").disabled = on;
       }
 
@@ -284,6 +294,32 @@
         else { liveTimer = setInterval(() => send({ cmd: "read" }), 1000); $("readLive").textContent = "⏸ Stop"; }
       };
       $("restart").onclick = () => send({ cmd: "restart" });
+
+      // ── Mise à jour OTA (l'ESP télécharge + flashe l'app lui-même, garde la config) ──
+      let otaVersions = [];
+      (async function loadOtaVersions() {
+        try {
+          const res = await fetch("../flash/versions.json?cb=" + Date.now());
+          otaVersions = await res.json();
+          const sel = $("otaVersion");
+          sel.innerHTML = otaVersions
+            .map((v, i) => `<option value="${i}">${esc(v.tag)}${i === 0 ? " (latest)" : ""}</option>`)
+            .join("") || "<option>aucune version</option>";
+        } catch {
+          $("otaVersion").innerHTML = "<option>versions indisponibles</option>";
+        }
+      })();
+      $("otaUpdate").onclick = () => {
+        const v = otaVersions[+$("otaVersion").value];
+        if (!v) { log("⚠️ aucune version sélectionnée"); return; }
+        // Binaire app servi par Pages (même origine, HTTPS) -> l'ESP le flashe via OTA.
+        const url = new URL(
+          "../flash/versions/" + encodeURIComponent(v.tag) + "/rami-universal.bin",
+          location.href,
+        ).href;
+        log("⬆ OTA vers " + v.tag + " — l'ESP va télécharger, flasher puis redémarrer…");
+        send({ cmd: "ota", url });
+      };
 
       if (!("serial" in navigator)) { $("nosupport").style.display = "block"; $("connect").disabled = true; }
     </script>
