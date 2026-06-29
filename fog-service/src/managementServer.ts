@@ -157,165 +157,251 @@ export function handleCommand(
   return { status: 200, body: { ok: true, target: String(target), sent: 1 } };
 }
 
-const UI_HTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8">
+const UI_HTML = `
+<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RAMI · Gestion</title>
+<title>RAMI · Fog Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Martian+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Martian+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#07120d;--panel:#0d1f17;--line:#1c3a2b;--ph:#2bf08a;--phd:#1c9d5b;--text:#b8d8c8;--muted:#6f9484;--bad:#ff6b6b;}
+ :root{
+  --bg:#050d09;--bg2:#0a1812;--panel:rgba(13,31,23,.72);--line:#1b3a2b;--line2:#27543d;
+  --ph:#34f5a0;--phd:#19b873;--text:#bfe0d0;--muted:#6b9082;--bad:#ff6f6f;--warn:#ffc15e;
+ }
  *{box-sizing:border-box}
- body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -10%,#0e2a1d 0,var(--bg) 55%),repeating-linear-gradient(0deg,transparent 0 3px,rgba(43,240,138,.022) 3px 4px);color:var(--text);font-family:"Martian Mono",ui-monospace,monospace;padding:2rem 1rem}
- main{max-width:860px;margin:0 auto}
- h1{font-family:"Big Shoulders Display",sans-serif;font-weight:800;font-size:2.2rem;letter-spacing:.02em;margin:0;color:var(--ph);text-shadow:0 0 18px rgba(43,240,138,.4)}
- .sub{color:var(--muted);font-size:.8rem;margin:.1rem 0 1.5rem}
- .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.2rem 1.4rem;margin-bottom:1rem;box-shadow:0 0 40px rgba(43,240,138,.05)}
- .card h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--phd);margin:0 0 .9rem}
- label{display:block;font-size:.7rem;color:var(--muted);margin:.5rem 0 .15rem}
- input{width:100%;background:#04130c;color:var(--text);border:1px solid var(--line);border-radius:7px;padding:.5rem .6rem;font:inherit;font-size:.85rem}
- button{font-family:inherit;font-weight:600;font-size:.82rem;cursor:pointer;background:#04130c;color:var(--ph);border:1px solid var(--phd);border-radius:7px;padding:.5rem .9rem;margin-top:.7rem;transition:background .15s}
- button:hover{background:rgba(43,240,138,.1)}
- button.primary{background:var(--phd);color:#04130c;border-color:var(--ph)}
- button.warn{color:#ffcf6a;border-color:#9e6a03}
- button.mini{margin:0;padding:.25rem .6rem;font-size:.72rem}
- .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:end}
- .grid2{display:grid;grid-template-columns:1fr 1fr;gap:.4rem .9rem}
- .grid2 .f{min-width:0}
- code{color:var(--ph)}
- .dot{font-size:.9rem}.dot.ok{color:var(--ph)}.dot.ko{color:var(--bad)}
- .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.7rem;margin-top:.8rem}
- .metric{background:#04130c;border:1px solid var(--line);border-radius:8px;padding:.6rem .7rem}
- .metric .k{font-size:.66rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
- .metric .v{font-size:1.15rem;color:var(--ph);margin-top:.15rem}
- .dev{display:flex;align-items:center;gap:.6rem;padding:.5rem .2rem;border-bottom:1px solid var(--line);font-size:.82rem}
- .dev:last-child{border-bottom:0}
- .dev .topic{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
- .badge{font-size:.68rem;color:#04130c;background:var(--phd);border-radius:20px;padding:.1rem .55rem}
- .badge.unk{background:#3a4a42;color:var(--muted)}
- .muted{color:var(--muted)}.hint{font-size:.72rem;color:var(--muted);margin-top:.6rem}
- #toast{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);background:var(--phd);color:#04130c;font-weight:600;
-  padding:.6rem 1.1rem;border-radius:8px;font-size:.82rem;opacity:0;transition:opacity .25s;pointer-events:none}
- #toast.show{opacity:1}
- details summary{cursor:pointer;color:var(--phd);font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}
+ html,body{margin:0;height:100%}
+ body{
+  background:
+   radial-gradient(1200px 600px at 80% -10%,rgba(52,245,160,.10),transparent 60%),
+   radial-gradient(900px 500px at 10% 110%,rgba(25,184,115,.08),transparent 60%),
+   var(--bg);
+  color:var(--text);font-family:"Martian Mono",ui-monospace,monospace;font-size:14px;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+ }
+ /* scanlines + grille d'ambiance */
+ .scan{position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(52,245,160,.03) 2px 3px);
+  mix-blend-mode:screen;animation:drift 16s linear infinite;opacity:.6}
+ @keyframes drift{to{background-position:0 60px}}
+ a{color:var(--phd)} code{color:var(--ph);font-size:.92em}
+ button{font-family:inherit;font-weight:600;cursor:pointer;border-radius:9px;font-size:.82rem;
+  background:#06160e;color:var(--ph);border:1px solid var(--line2);padding:.55rem 1rem;transition:.15s}
+ button:hover{background:rgba(52,245,160,.12);border-color:var(--ph)}
+ button.primary{background:var(--ph);color:#04130c;border-color:var(--ph);box-shadow:0 0 22px rgba(52,245,160,.3)}
+ button.primary:hover{filter:brightness(1.08)}
+ button.warn{color:var(--warn);border-color:#7a5a16}
+ button.ghost{background:transparent;border-color:var(--line);color:var(--muted);padding:.4rem .8rem}
+ input{width:100%;background:#04120c;color:var(--text);border:1px solid var(--line);border-radius:9px;
+  padding:.6rem .7rem;font:inherit;font-size:.85rem;outline:none;transition:.15s}
+ input:focus{border-color:var(--ph);box-shadow:0 0 0 3px rgba(52,245,160,.12)}
+
+ /* ── Top bar ── */
+ .bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+  padding:.8rem 1.4rem;background:rgba(5,13,9,.78);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+ .brand{display:flex;align-items:baseline;gap:.6rem}
+ .logo{font-family:"Big Shoulders Display",sans-serif;font-weight:800;font-size:1.5rem;color:var(--ph);
+  letter-spacing:.04em;text-shadow:0 0 16px rgba(52,245,160,.5)}
+ .tag{font-size:.62rem;letter-spacing:.25em;color:var(--muted)}
+ .barright{display:flex;align-items:center;gap:.8rem}
+ .pill{display:inline-flex;align-items:center;gap:.5rem;font-size:.74rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:30px;padding:.3rem .8rem}
+ .pill .d{width:8px;height:8px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 0 rgba(255,111,111,.5)}
+ .pill.live .d{background:var(--ph);animation:pulse 2s infinite}
+ @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,245,160,.5)}70%{box-shadow:0 0 0 7px rgba(52,245,160,0)}100%{box-shadow:0 0 0 0 rgba(52,245,160,0)}}
+
+ /* ── Login ── */
+ .login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;padding:2rem;position:relative}
+ .scope{position:absolute;width:420px;height:420px;border-radius:50%;border:1px solid rgba(52,245,160,.14);
+  box-shadow:0 0 80px rgba(52,245,160,.12) inset;animation:breathe 5s ease-in-out infinite}
+ .scope::after{content:"";position:absolute;inset:60px;border-radius:50%;border:1px solid rgba(52,245,160,.1)}
+ @keyframes breathe{50%{transform:scale(1.06);opacity:.7}}
+ .login h1{font-family:"Big Shoulders Display",sans-serif;font-weight:800;font-size:4rem;margin:0;color:var(--ph);
+  letter-spacing:.05em;text-shadow:0 0 30px rgba(52,245,160,.45);z-index:1}
+ .loginsub{font-size:.72rem;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;margin-bottom:1.4rem;z-index:1}
+ .loginbox{display:flex;gap:.6rem;width:min(380px,90vw);z-index:1}
+ .loginbox input{flex:1}
+ .err{color:var(--bad);font-size:.78rem;height:1rem;z-index:1}
+
+ /* ── Dashboard ── */
+ .dash{max-width:1100px;margin:0 auto;padding:1.6rem 1.4rem 4rem}
+ h2{font-family:"Big Shoulders Display",sans-serif;font-weight:700;font-size:1.15rem;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--text);margin:0 0 .9rem}
+ .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1.6rem}
+ .tile{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--phd);border-radius:12px;
+  padding:.9rem 1rem;opacity:0;transform:translateY(10px);animation:rise .5s forwards}
+ .tile.bad{border-left-color:var(--bad)}
+ .tile .k{font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+ .tile .v{font-size:1.55rem;margin-top:.25rem;color:var(--ph);display:flex;align-items:center;gap:.5rem}
+ .tile.bad .v{color:var(--bad)}
+ .tile .v .d{width:10px;height:10px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+ @keyframes rise{to{opacity:1;transform:none}}
+
+ .cols{display:grid;grid-template-columns:1.6fr 1fr;gap:1.2rem;align-items:start}
+ @media(max-width:820px){.cols{grid-template-columns:1fr}}
+ .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.3rem 1.4rem}
+
+ .fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.8rem}
+ .node{background:#06160e;border:1px solid var(--line);border-radius:12px;padding:.9rem;transition:.15s;
+  opacity:0;transform:translateY(8px);animation:rise .45s forwards}
+ .node:hover{border-color:var(--line2);transform:translateY(-2px)}
+ .node .top{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
+ .node .online{width:9px;height:9px;border-radius:50%;background:var(--ph);box-shadow:0 0 8px var(--ph);flex:none}
+ .node .name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+ .node .topic{font-size:.66rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:.6rem}
+ .node .foot{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+ .ver{font-size:.66rem;color:#04130c;background:var(--phd);border-radius:20px;padding:.12rem .55rem;font-weight:600}
+ .ver.unk{background:#2c3f37;color:var(--muted)}
+ .node button{padding:.3rem .6rem;font-size:.7rem}
+ .empty{color:var(--muted);font-size:.85rem;padding:1rem 0;text-align:center}
+
+ .actions .act{padding:.4rem 0 1rem;border-bottom:1px solid var(--line)}
+ .actions .act:last-child{border-bottom:0;padding-bottom:0}
+ .actions h3{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--phd);margin:.2rem 0 .55rem}
+ .actions input{margin-bottom:.45rem}
+ details summary{cursor:pointer;color:var(--muted);font-size:.74rem;margin-top:.4rem}
+ details[open] summary{color:var(--phd);margin-bottom:.5rem}
+
+ #toast{position:fixed;left:50%;bottom:1.4rem;transform:translateX(-50%) translateY(20px);z-index:60;
+  background:var(--ph);color:#04130c;font-weight:600;padding:.65rem 1.2rem;border-radius:10px;font-size:.82rem;
+  box-shadow:0 8px 30px rgba(0,0,0,.4);opacity:0;transition:.3s;pointer-events:none}
+ #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+ #toast.err{background:var(--bad)}
 </style></head><body>
-<main>
- <h1>RAMI · GESTION</h1>
- <div class="sub">Pilotage de la flotte ESP depuis le fog</div>
+<div class="scan"></div>
 
- <div class="card" id="loginCard">
-  <h2>Connexion</h2>
-  <label>Mot de passe admin (ou token)</label>
-  <input id="tok" type="password" placeholder="mot de passe ou token" onkeydown="if(event.key==='Enter')login()">
-  <button class="primary" onclick="login()">Connexion</button>
-  <div class="hint" id="loginErr"></div>
+<header class="bar" id="bar" hidden>
+ <div class="brand"><span class="logo">RAMI</span><span class="tag">FOG&nbsp;CONTROL</span></div>
+ <div class="barright">
+  <span class="pill" id="connPill"><i class="d"></i><span id="connTxt">hors ligne</span></span>
+  <button class="ghost" id="logout">Déconnexion</button>
  </div>
+</header>
 
- <div id="dash" style="display:none">
-  <div class="card">
-   <h2>État du fog</h2>
-   <div><span id="dHealth" class="dot ko">●</span> santé globale &nbsp;&nbsp; <span id="dKafka" class="dot ko">●</span> Kafka</div>
-   <div class="metrics">
-    <div class="metric"><div class="k">outbox</div><div class="v" id="mOutbox">—</div></div>
-    <div class="metric"><div class="k">buffer</div><div class="v" id="mBuffer">—</div></div>
-    <div class="metric"><div class="k">droppés</div><div class="v" id="mDrops">—</div></div>
-    <div class="metric"><div class="k">capteurs</div><div class="v" id="mDevices">—</div></div>
-    <div class="metric"><div class="k">uptime</div><div class="v" id="mUptime">—</div></div>
+<section class="login" id="login">
+ <div class="scope"></div>
+ <h1>RAMI</h1>
+ <div class="loginsub">Fog Control · accès restreint</div>
+ <div class="loginbox">
+  <input id="pwd" type="password" placeholder="mot de passe admin" autocomplete="current-password">
+  <button class="primary" id="loginBtn">Entrer</button>
+ </div>
+ <div class="err" id="loginErr"></div>
+</section>
+
+<main class="dash" id="dash" hidden>
+ <section class="stats" id="stats"></section>
+ <div class="cols">
+  <section class="panel">
+   <h2>Flotte de capteurs</h2>
+   <div class="fleet" id="fleet"><div class="empty">chargement…</div></div>
+  </section>
+  <aside class="panel actions">
+   <h2>Actions · toute la flotte</h2>
+   <div class="act">
+    <h3>WiFi</h3>
+    <input id="ssid" placeholder="SSID">
+    <input id="wpass" type="password" placeholder="mot de passe WiFi">
+    <button data-act="wifi">Appliquer à tous</button>
    </div>
-  </div>
-
-  <div class="card">
-   <h2>Capteurs (ESP)</h2>
-   <div id="devs"><div class="muted">chargement…</div></div>
-   <button class="warn" onclick="if(confirm('Redémarrer TOUS les ESP ?'))cmd('all','restart')">⟳ Redémarrer tous</button>
-  </div>
-
-  <div class="card">
-   <h2>Configurer (tous les ESP)</h2>
-   <div class="grid2">
-    <div class="f"><label>WiFi SSID</label><input id="ssid"></div>
-    <div class="f"><label>WiFi mot de passe</label><input id="wpass" type="password"></div>
+   <div class="act">
+    <h3>MQTT</h3>
+    <input id="mbroker" placeholder="broker (IP)">
+    <input id="muser" placeholder="utilisateur">
+    <input id="mpass" type="password" placeholder="mot de passe">
+    <button data-act="mqtt">Appliquer à tous</button>
    </div>
-   <button onclick="setWifi()">Appliquer le WiFi à tous</button>
-   <div class="grid2" style="margin-top:1rem">
-    <div class="f"><label>MQTT broker</label><input id="mbroker" placeholder="192.168.10.4"></div>
-    <div class="f"><label>MQTT user</label><input id="muser"></div>
-    <div class="f"><label>MQTT mot de passe</label><input id="mpass" type="password"></div>
+   <div class="act">
+    <h3>Maintenance</h3>
+    <button class="warn" data-act="restart">⟳ Redémarrer tous</button>
+    <details>
+     <summary>OTA manuelle (avancé)</summary>
+     <input id="otaurl" placeholder="https://…/rami-universal.bin">
+     <button class="warn" data-act="ota">⬆ OTA à tous</button>
+    </details>
    </div>
-   <button onclick="setMqtt()">Appliquer le MQTT à tous</button>
-  </div>
-
-  <div class="card">
-   <details>
-    <summary>OTA manuelle (avancé)</summary>
-    <label>URL du binaire app (.bin)</label>
-    <input id="otaurl" placeholder="https://…/flash/versions/v1.2.8/rami-universal.bin">
-    <button class="warn" onclick="if(confirm('Lancer l OTA sur TOUS les ESP ?'))otaAll()">⬆ OTA à tous</button>
-    <div class="hint">L'auto-OTA (opt-in) met déjà à jour chaque ESP en retard automatiquement. Ce bouton est pour un déclenchement manuel.</div>
-   </details>
-  </div>
+  </aside>
  </div>
 </main>
+
 <div id="toast"></div>
 <script>
- var $=function(id){return document.getElementById(id)};
+ var $=function(s){return document.querySelector(s)};
  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
- function H(extra){var h=Object.assign({},extra||{});var t=localStorage.getItem('mgmtToken');if(t)h['X-Mgmt-Token']=t;return h}
- var toastT;function toast(m){var e=$('toast');e.textContent=m;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){e.classList.remove('show')},2200)}
+ function H(x){var h=Object.assign({},x||{});var t=localStorage.getItem('mgmtToken');if(t)h['X-Mgmt-Token']=t;return h}
+ var tT;function toast(m,bad){var e=$('#toast');e.textContent=m;e.className=bad?'show err':'show';clearTimeout(tT);tT=setTimeout(function(){e.className=''},2400)}
+ function fmtUp(s){s=+s||0;var h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?(h+'h'+(m<10?'0':'')+m):(m?m+'m':s+'s')}
+ function nodeName(t){var n=String(t);if(n.slice(-13)==='-topic/sensor')return n.slice(0,-13);if(n.slice(-7)==='/sensor')return n.slice(0,-7);return n}
 
- function showDash(on){$('dash').style.display=on?'block':'none';$('loginCard').style.display=on?'none':'block'}
+ function view(authed){
+  $('#login').hidden=authed;$('#dash').hidden=!authed;$('#bar').hidden=!authed;
+ }
+ function logout(){localStorage.removeItem('mgmtToken');view(false);$('#pwd').value=''}
 
  async function login(){
-  var secret=$('tok').value;
+  var secret=$('#pwd').value;
   var r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:secret})});
   if(r.ok){var j=await r.json();localStorage.setItem('mgmtToken',j.token);}
   else{var e=await r.json().catch(function(){return{}});
    if((e.error||'').indexOf('non configuré')>=0){localStorage.setItem('mgmtToken',secret);}
-   else{$('loginErr').textContent='Mot de passe invalide';return;}}
-  $('tok').value='';$('loginErr').textContent='';init();
+   else{$('#loginErr').textContent='Mot de passe invalide';return;}}
+  $('#pwd').value='';$('#loginErr').textContent='';init();
  }
 
  async function cmd(target,c,extra){
   var r=await fetch('/api/command',{method:'POST',headers:H({'content-type':'application/json'}),body:JSON.stringify(Object.assign({target:target,cmd:c},extra||{}))});
-  if(r.status===401){toast('Session expirée — reconnecte-toi');showDash(false);return false}
+  if(r.status===401){toast('Session expirée',1);logout();return}
   var j=await r.json().catch(function(){return{}});
-  toast(j.ok?('✓ '+c+(j.sent!=null?(' ('+j.sent+')'):'')):('✗ '+(j.error||'erreur')));
-  refresh();return j.ok;
+  if(j.ok)toast('✓ '+c+(j.sent!=null?(' → '+j.sent):''));else toast('✗ '+(j.error||'erreur'),1);
+  setTimeout(refresh,400);
  }
- function setWifi(){if(!$('ssid').value)return toast('SSID requis');cmd('all','set_wifi',{ssid:$('ssid').value,pass:$('wpass').value})}
- function setMqtt(){cmd('all','set_mqtt',{broker:$('mbroker').value,user:$('muser').value,pass:$('mpass').value})}
- function otaAll(){if(!$('otaurl').value)return toast('URL requise');cmd('all','ota',{url:$('otaurl').value})}
 
+ function tile(k,v,opts){opts=opts||{};
+  var dot=opts.dot?('<span class="d"></span>'):'';
+  return '<div class="tile'+(opts.bad?' bad':'')+'" style="animation-delay:'+(opts.i*0.05)+'s"><div class="k">'+k+'</div><div class="v">'+dot+esc(String(v))+'</div></div>';
+ }
  async function loadStatus(){
   var r=await fetch('/api/status',{headers:H()});
-  if(!r.ok){showDash(false);return false}
+  if(!r.ok){logout();return false}
   var s=await r.json();
-  $('dHealth').className='dot '+(s.healthy?'ok':'ko');
-  $('dKafka').className='dot '+(s.kafkaConnected?'ok':'ko');
-  $('mOutbox').textContent=s.outboxPending;$('mBuffer').textContent=s.bufferSize;
-  $('mDrops').textContent=s.drops;$('mDevices').textContent=s.devices;$('mUptime').textContent=s.uptimeSec+'s';
+  $('#connPill').className='pill live';$('#connTxt').textContent='en ligne · '+fmtUp(s.uptimeSec);
+  $('#stats').innerHTML=
+   tile('Santé',s.healthy?'OK':'KO',{dot:1,bad:!s.healthy,i:0})+
+   tile('Kafka',s.kafkaConnected?'OK':'KO',{dot:1,bad:!s.kafkaConnected,i:1})+
+   tile('Capteurs',s.devices,{i:2})+
+   tile('Outbox',s.outboxPending,{bad:s.outboxPending<0,i:3})+
+   tile('Buffer',s.bufferSize,{i:4})+
+   tile('Droppés',s.drops,{bad:s.drops>0,i:5});
   return true;
  }
  async function loadDevices(){
-  var r=await fetch('/api/devices',{headers:H()});if(!r.ok)return;var j=await r.json();
-  var d=j.devices||[];
-  $('devs').innerHTML=d.length?d.map(function(x){
-   var v=(x.version&&x.version!=='?')?('<span class="badge">'+esc(x.version)+'</span>'):'<span class="badge unk">?</span>';
-   return '<div class="dev"><span class="topic"><code>'+esc(x.topic)+'</code></span>'+v+
-    '<button class="mini restart-dev" data-topic="'+esc(x.topic)+'">restart</button></div>';
-  }).join(''):'<div class="muted">aucun capteur vu pour l instant</div>';
+  var r=await fetch('/api/devices',{headers:H()});if(!r.ok)return;var j=await r.json();var d=j.devices||[];
+  if(!d.length){$('#fleet').innerHTML='<div class="empty">Aucun capteur vu pour le moment.<br>Allume un ESP configuré pour ce fog.</div>';return}
+  $('#fleet').innerHTML=d.map(function(x,i){
+   var v=(x.version&&x.version!=='?')?('<span class="ver">'+esc(x.version)+'</span>'):'<span class="ver unk">version ?</span>';
+   return '<div class="node" style="animation-delay:'+(i*0.04)+'s">'+
+    '<div class="top"><span class="online"></span><span class="name">'+esc(nodeName(x.topic))+'</span></div>'+
+    '<div class="topic">'+esc(x.topic)+'</div>'+
+    '<div class="foot">'+v+'<button class="restart-dev" data-topic="'+esc(x.topic)+'">⟳ restart</button></div></div>';
+  }).join('');
  }
- $('devs').addEventListener('click',function(e){
-  var b=e.target.closest('.restart-dev');if(b)cmd(b.dataset.topic,'restart');
- });
-
  function refresh(){loadStatus();loadDevices()}
- async function init(){
-  var ok=await loadStatus();   // 200 -> authentifié (ou aucune auth configurée)
-  if(ok){showDash(true);loadDevices();}
-  else{showDash(false);}
- }
- init();setInterval(function(){if($('dash').style.display!=='none')refresh()},5000);
-</script></body></html>`;
+ async function init(){var ok=await loadStatus();view(ok);if(ok)loadDevices()}
+
+ // events
+ $('#loginBtn').addEventListener('click',login);
+ $('#pwd').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
+ $('#logout').addEventListener('click',logout);
+ $('#fleet').addEventListener('click',function(e){var b=e.target.closest('.restart-dev');if(b)cmd(b.dataset.topic,'restart')});
+ document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;var a=b.dataset.act;
+  if(a==='wifi'){if(!$('#ssid').value)return toast('SSID requis',1);cmd('all','set_wifi',{ssid:$('#ssid').value,pass:$('#wpass').value})}
+  else if(a==='mqtt')cmd('all','set_mqtt',{broker:$('#mbroker').value,user:$('#muser').value,pass:$('#mpass').value});
+  else if(a==='restart'){if(confirm('Redémarrer TOUS les ESP ?'))cmd('all','restart')}
+  else if(a==='ota'){if(!$('#otaurl').value)return toast('URL requise',1);if(confirm('OTA sur TOUS les ESP ?'))cmd('all','ota',{url:$('#otaurl').value})}
+ });
+ init();setInterval(function(){if(!$('#dash').hidden)refresh()},5000);
+</script></body></html>
+`;
 
 export function createManagementServer(
   fog: DeviceCommandProvider,
