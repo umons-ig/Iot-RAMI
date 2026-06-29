@@ -4,6 +4,7 @@
 #include <WiFiManager.h>
 #include <esp_task_wdt.h>
 #include <HTTPUpdate.h>
+#include "Version.hpp"
 
 // Watchdog matériel : si loop() se fige (NTP, reconnexion, lib bloquante) plus
 // longtemps que ce délai, l'ESP32 redémarre au lieu de rester zombie. §2 revue.
@@ -352,6 +353,7 @@ void sendPing(PubSubClient& client, const char* topic,const bool& retained){
     DynamicJsonDocument doc(1024);
     doc[MSG_TIMESTAMP] = timestamp_buffer;
     doc[MSG_CMD] = COMMAND_PING;
+    doc["version"] = FIRMWARE_VERSION; // le fog suit la version par appareil (auto-OTA)
 
     char json_buffer[512];
     serializeJson(doc, json_buffer);
