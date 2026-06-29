@@ -1,0 +1,16 @@
+{
+  "name": "RAMI Firmware (mise à jour)",
+  "version": "latest",
+  "new_install_prompt_erase": false,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "./rami-universal.bin",
+          "offset": 65536
+        }
+      ]
+    }
+  ]
+}
