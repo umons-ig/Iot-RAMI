@@ -29,6 +29,9 @@ const outboxPullPending = jest.fn().mockResolvedValue([]);
 const outboxMarkSynced = jest.fn().mockResolvedValue(undefined);
 const outboxPurgeSynced = jest.fn().mockResolvedValue(0);
 const outboxClose = jest.fn().mockResolvedValue(undefined);
+const outboxAddHaAnnounced = jest.fn().mockResolvedValue(undefined);
+const outboxClearHaAnnounced = jest.fn().mockResolvedValue(undefined);
+const outboxLoadHaAnnounced = jest.fn().mockResolvedValue([]);
 
 // Import APRES les mocks
 import MqttFog, { mapZigbeeToMeasures, buildHaDiscovery, haNodeId } from "../mqttFog";
@@ -46,6 +49,10 @@ function createFogInstance(): any {
     markSynced: outboxMarkSynced,
     purgeSynced: outboxPurgeSynced,
     close: outboxClose,
+    setHaExposed: jest.fn().mockResolvedValue(undefined),
+    addHaAnnounced: outboxAddHaAnnounced,
+    clearHaAnnounced: outboxClearHaAnnounced,
+    loadHaAnnounced: outboxLoadHaAnnounced,
   };
   instance.buffer = new Map();
   instance.knownDevices = new Set();
@@ -592,5 +599,77 @@ describe("MqttFog — découverte Home Assistant (MQTT Discovery)", () => {
     const { topic } = buildHaDiscovery("x/sensor", "humidity");
     expect(topic.startsWith("homeassistant/")).toBe(true);
     expect(topic.endsWith("/sensor")).toBe(false);
+  });
+});
+
+describe("MqttFog — exposition HA (publication / nettoyage / sécurité)", () => {
+  let fog: any;
+  beforeEach(() => {
+    fog = createFogInstance();
+    mqttPublish.mockClear();
+    outboxAddHaAnnounced.mockClear();
+    outboxClearHaAnnounced.mockClear();
+  });
+
+  it("publie une config retained par measureType (1×) pour un capteur exposé", () => {
+    fog.haExposed.add("esp/sensor");
+    fog.maybePublishHaConfigs("esp/sensor", [{ measureType: "temperature", value: 1 }]);
+    fog.maybePublishHaConfigs("esp/sensor", [{ measureType: "temperature", value: 2 }]);
+    const cfg = mqttPublish.mock.calls.filter(
+      (c: unknown[]) => c[0] === "homeassistant/sensor/esp/temperature/config",
+    );
+    expect(cfg).toHaveLength(1); // publié une seule fois
+    expect(cfg[0][2]).toEqual({ retain: true });
+    expect(outboxAddHaAnnounced).toHaveBeenCalledWith("esp/sensor", "temperature");
+  });
+
+  it("n'expose rien si le capteur n'est pas activé", () => {
+    fog.maybePublishHaConfigs("esp/sensor", [{ measureType: "temperature", value: 1 }]);
+    expect(mqttPublish).not.toHaveBeenCalled();
+  });
+
+  it("REFUSE un measureType dangereux (injection Jinja) — pb #2", () => {
+    fog.haExposed.add("esp/sensor");
+    fog.maybePublishHaConfigs("esp/sensor", [
+      { measureType: "temp') }}{{ 7*7 }}{{ ('", value: 1 },
+      { measureType: "humidity", value: 2 },
+    ]);
+    const topics = mqttPublish.mock.calls
+      .map((c: unknown[]) => c[0])
+      .filter((t: unknown) => typeof t === "string" && t.startsWith("homeassistant/"));
+    expect(topics).toEqual(["homeassistant/sensor/esp/humidity/config"]); // que le type propre
+  });
+
+  it("toggle-off efface les configs retained (payload vide) + oublie en DB", async () => {
+    fog.haExposed.add("esp/sensor");
+    fog.maybePublishHaConfigs("esp/sensor", [{ measureType: "temperature", value: 1 }]);
+    mqttPublish.mockClear();
+    await fog.setHaExposed("esp/sensor", false);
+    const clear = mqttPublish.mock.calls.find(
+      (c: unknown[]) => c[0] === "homeassistant/sensor/esp/temperature/config",
+    );
+    expect(clear).toBeDefined();
+    expect(clear![1]).toBe(""); // payload vide → HA retire l'entité
+    expect(clear![2]).toEqual({ retain: true });
+    expect(outboxClearHaAnnounced).toHaveBeenCalledWith("esp/sensor");
+    expect(fog.haExposed.has("esp/sensor")).toBe(false);
+  });
+
+  it("toggle-off nettoie même les mesures annoncées AVANT un redémarrage — pb #1", async () => {
+    // Simule l'état post-restart : haExposed + haPublished rechargés depuis Postgres,
+    // sans qu'aucune nouvelle mesure ne soit encore arrivée.
+    fog.haExposed.add("esp/sensor");
+    fog.haPublished.set("esp/sensor", new Set(["humidity"]));
+    await fog.setHaExposed("esp/sensor", false);
+    const clear = mqttPublish.mock.calls.find(
+      (c: unknown[]) => c[0] === "homeassistant/sensor/esp/humidity/config" && c[1] === "",
+    );
+    expect(clear).toBeDefined();
+  });
+
+  it("invariant : un device Zigbee n'entre pas dans knownDevices (pas d'expo HA accidentelle)", async () => {
+    await fog.handleZigbeeMessage("zigbee2mqtt/salon", { temperature: 20 });
+    expect(fog.getKnownDevices()).not.toContain("salon/sensor");
+    expect(fog.getKnownDevices()).toHaveLength(0);
   });
 });

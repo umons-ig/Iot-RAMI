@@ -132,6 +132,16 @@ class MqttFog {
       // connues de HA ; on les republie paresseusement à la prochaine mesure.
       await MqttFog.instance.outbox.initHaExposed();
       MqttFog.instance.haExposed = new Set(await MqttFog.instance.outbox.loadHaExposed());
+      // Repeuple l'index des mesures annoncées (sinon le nettoyage au toggle-off
+      // est inopérant après un redémarrage — revue PR #89, pb #1).
+      for (const { topic, measureType } of await MqttFog.instance.outbox.loadHaAnnounced()) {
+        let set = MqttFog.instance.haPublished.get(topic);
+        if (!set) {
+          set = new Set();
+          MqttFog.instance.haPublished.set(topic, set);
+        }
+        set.add(measureType);
+      }
       MqttFog.instance.startReplicator();
       MqttFog.instance.startPurge();
     }
@@ -388,12 +398,23 @@ class MqttFog {
       this.haExposed.add(sensorTopic);
     } else {
       this.haExposed.delete(sensorTopic);
+      // Nettoyage : efface les configs retained des mesures annoncées. haPublished
+      // est repeuplé depuis Postgres au démarrage → fonctionne même après restart.
       const measures = this.haPublished.get(sensorTopic);
       if (measures) {
         for (const m of measures) this.clearHaConfig(sensorTopic, m);
         this.haPublished.delete(sensorTopic);
       }
+      await this.outbox.clearHaAnnounced(sensorTopic);
     }
+  }
+
+  /**
+   * measureType sûr à injecter dans un littéral Jinja (value_template HA) et un
+   * topic. Refuse quotes/accolades/backslash/… → anti-injection (revue PR #89 #2).
+   */
+  private isSafeMeasureType(t: string): boolean {
+    return /^[A-Za-z0-9 _.:-]{1,64}$/.test(t);
   }
 
   /** Publie (1× par measureType) les configs discovery HA d'un capteur exposé. */
@@ -406,16 +427,23 @@ class MqttFog {
     }
     for (const m of measures) {
       const type = (m as { measureType?: unknown })?.measureType;
-      if (typeof type === "string" && type && !published.has(type)) {
-        this.publishHaConfig(sensorTopic, type);
-        published.add(type);
+      if (typeof type !== "string" || !type || published.has(type)) continue;
+      if (!this.isSafeMeasureType(type)) {
+        console.warn(`⚠️ [HA] measureType ignoré (caractères non sûrs): ${JSON.stringify(type)}`);
+        continue;
       }
+      this.publishHaConfig(sensorTopic, type);
+      published.add(type);
     }
   }
 
   private publishHaConfig(sensorTopic: string, measureType: string): void {
     const { topic, payload } = buildHaDiscovery(sensorTopic, measureType);
     this.mqttClient.publish(topic, JSON.stringify(payload), { retain: true });
+    // Persiste l'annonce pour pouvoir nettoyer l'entité même après un restart.
+    this.outbox
+      .addHaAnnounced(sensorTopic, measureType)
+      .catch((e) => console.error("❌ [HA] addHaAnnounced", e));
   }
 
   private clearHaConfig(sensorTopic: string, measureType: string): void {
