@@ -155,12 +155,22 @@ export class Outbox {
   // ─── Intégration Home Assistant : capteurs exposés (opt-in par capteur) ───────
   // Persisté ici (Postgres) pour survivre aux redémarrages du conteneur fog.
 
-  /** Crée la table `ha_exposed` si absente. Idempotent. */
+  /** Crée les tables `ha_exposed` + `ha_announced` si absentes. Idempotent. */
   public async initHaExposed(): Promise<void> {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS ha_exposed (
         topic TEXT PRIMARY KEY,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+    // Mesures déjà annoncées à HA (config retained publiée) par capteur. Persisté
+    // pour pouvoir NETTOYER les entités HA même après un redémarrage du fog (sinon
+    // les configs retained restent orphelines au toggle-off — cf. revue PR #89).
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS ha_announced (
+        topic TEXT NOT NULL,
+        measure_type TEXT NOT NULL,
+        PRIMARY KEY (topic, measure_type)
       );
     `);
   }
@@ -181,6 +191,28 @@ export class Outbox {
     } else {
       await this.pool.query(`DELETE FROM ha_exposed WHERE topic = $1`, [topic]);
     }
+  }
+
+  /** Toutes les mesures annoncées à HA (pour repeupler l'index au démarrage). */
+  public async loadHaAnnounced(): Promise<Array<{ topic: string; measureType: string }>> {
+    const result = await this.pool.query(`SELECT topic, measure_type FROM ha_announced`);
+    return result.rows.map((row: { topic: string; measure_type: string }) => ({
+      topic: row.topic,
+      measureType: row.measure_type,
+    }));
+  }
+
+  /** Mémorise qu'une mesure a été annoncée à HA pour ce capteur. */
+  public async addHaAnnounced(topic: string, measureType: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO ha_announced (topic, measure_type) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [topic, measureType],
+    );
+  }
+
+  /** Oublie toutes les mesures annoncées d'un capteur (après nettoyage HA). */
+  public async clearHaAnnounced(topic: string): Promise<void> {
+    await this.pool.query(`DELETE FROM ha_announced WHERE topic = $1`, [topic]);
   }
 
   /**

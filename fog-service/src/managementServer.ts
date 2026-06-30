@@ -539,6 +539,14 @@ export function createManagementServer(
           res.end(JSON.stringify({ error: "topic requis" }));
           return;
         }
+        // N'exposer que des ESP RAMI connus : getKnownDevices() exclut les
+        // appareils Zigbee (gérés par Z2M → pas de doublon HA) et tout topic
+        // arbitraire passé en direct par l'API.
+        if (!fog.getKnownDevices().includes(topic)) {
+          res.writeHead(400, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "capteur inconnu" }));
+          return;
+        }
         fog
           .setHaExposed(topic, enabled)
           .then(() => {
