@@ -1,7 +1,11 @@
 # Documentation technique — RAMI 1.0
 
+> 👋 **Nouveau sur le projet ?** Commence par **[PASSATION.md](./PASSATION.md)** —
+> accès à réclamer, runbook de déploiement, process de release firmware et gaps ouverts.
+
 | Document       | Description                                                    |
 |----------------|----------------------------------------------------------------|
+| [PASSATION.md](./PASSATION.md) | **Reprise du projet** : accès, déploiement, release firmware, gaps |
 | [MQTT.md](./MQTT.md)   | Topics MQTT, protocole capteur/fog, format des messages |
 | [KAFKA.md](./KAFKA.md) | Topic Kafka `sensor-data`, schemas des 3 types de messages (`start`, `data`, `stop`) |
 | [API.md](./API.md)     | Reference complete de l'API REST + WebSocket Socket.io  |
