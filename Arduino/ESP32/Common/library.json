@@ -1,0 +1,1 @@
+{ "name": "Common", "version": "1.0.0", "dependencies": [ "knolleary/PubSubClient@^2.8", "bblanchon/ArduinoJson@^6.21.0", "tzapu/WiFiManager@^2.0.17", "arduino-libraries/NTPClient@^3.2.1" ] }

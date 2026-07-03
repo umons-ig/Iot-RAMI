@@ -46,7 +46,7 @@ class MqttConnector:
         if rc == 0:
             print("Connected to MQTT Broker at {}! ".format(self.broker_address))
         else:
-            print("Failed to connect, return code %d\n", rc)
+            print(f"Failed to connect, return code {rc}")
 
     def on_disconnect(self, client, userdata, rc):
         # Tell you when you are disconnected

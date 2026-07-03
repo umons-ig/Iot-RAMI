@@ -36,6 +36,7 @@ class MqttAppConstants:
     COMMAND_PING = "ping"
     COMMAND_START = "start"
     COMMAND_STOP = "stop"
+    COMMAND_ACK = "ack"
 
     ####### Sensor answers
     # The sensor answeres the server command

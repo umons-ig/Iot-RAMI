@@ -6,12 +6,12 @@ from constants import MqttAppConstants
 from abc import ABC, abstractmethod
 
 class Mode(ABC):
-    def __init__(self, mqtt_service):
+    def __init__(self, mqtt_service, topic=None):
         self.mqtt_service = mqtt_service
         self.mqtt_service.client.on_message = self.on_message_for_mode
 
-        # topic duplication
-        topic = input("Enter topic used for communication (between sensor and server): \n")
+        if topic is None:
+            topic = input("Enter topic used for communication (between sensor and server): \n")
         self.topic_for_hearing_from_sensor = MqttAppConstants.get_full_topic_name(topic, MqttAppConstants.HEARING_FROM_SENSOR)
         self.topic_for_hearing_from_server = MqttAppConstants.get_full_topic_name(topic, MqttAppConstants.HEARING_FROM_SERVER)
 

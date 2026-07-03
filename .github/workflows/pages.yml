@@ -1,0 +1,71 @@
+name: Deploy Pages
+
+# Déploie le site GitHub Pages (page d'accueil + outil de flash) en y incluant
+# le firmware « factory » de la dernière release, servi DEPUIS LA MÊME ORIGINE
+# que la page. Indispensable : ESP Web Tools télécharge le .bin via fetch(), et
+# les URLs de release GitHub redirigent sans header CORS (donc bloquées si
+# cross-origin). En servant le .bin depuis github.io, plus de problème CORS.
+#
+# Se redéclenche à chaque publication de release -> la page sert toujours la
+# dernière version, sans commiter de binaire dans git.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bundler les N dernières versions du firmware + changelogs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          # Releases (récentes d'abord) qui ont bien nos deux binaires.
+          gh api "repos/$REPO/releases?per_page=8" \
+            --jq '[ .[] | select(([.assets[].name] | index("rami-universal.bin")) and ([.assets[].name] | index("rami-universal-factory.bin"))) | { tag: .tag_name, name: .name, date: .published_at, body: .body } ]' \
+            > docs/flash/versions.json || echo "[]" > docs/flash/versions.json
+          echo "versions.json :"; cat docs/flash/versions.json
+          # Télécharge les binaires de chaque version sous versions/<tag>/.
+          for TAG in $(jq -r '.[].tag' docs/flash/versions.json); do
+            echo "→ $TAG"
+            mkdir -p "docs/flash/versions/$TAG"
+            gh release download "$TAG" --repo "$REPO" \
+              --pattern "rami-universal*.bin" --dir "docs/flash/versions/$TAG" --clobber || true
+          done
+          # Compat : la dernière version alimente aussi les manifests statiques
+          # (fallback de la page) avec cache-bust ?v=<tag>.
+          LATEST=$(jq -r '.[0].tag // "dev"' docs/flash/versions.json)
+          if [ "$LATEST" != "dev" ] && [ -d "docs/flash/versions/$LATEST" ]; then
+            cp docs/flash/versions/$LATEST/rami-universal*.bin docs/flash/ 2>/dev/null || true
+          fi
+          sed -i "s#rami-universal-factory.bin[^\"]*#rami-universal-factory.bin?v=${LATEST}#" docs/flash/manifest.json
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,85 @@
+name: Firmware Release
+
+# Build du firmware ESP32 (PlatformIO) et publication dans une GitHub Release,
+# qui alimente : (1) l'auto-OTA du fog (poll de /releases/latest) et (2) la page
+# GitHub Pages de flash USB (ESP Web Tools, via le « factory bin »).
+#
+# Déclenché par un tag sémver (ex. v1.2.0).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de release (ex. v1.2.0)"
+        required: true
+
+permissions:
+  contents: write # nécessaire pour créer la release + attacher les assets
+  actions: write # nécessaire pour dispatcher pages.yml (redéploiement de la page)
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer PlatformIO + esptool
+        # esptool<5 : la v5 renomme les commandes (merge_bin -> merge-bin) ; on
+        # garde la syntaxe v4 validée. PlatformIO ne fournit pas esptool en module
+        # Python importable -> on l'installe explicitement (python -m esptool).
+        run: pip install --upgrade platformio "esptool<5"
+
+      - name: Injecter la version (tag) dans le firmware
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          sed -i "s/#define FIRMWARE_VERSION .*/#define FIRMWARE_VERSION \"${TAG}\"/" \
+            Arduino/ESP32/Common/src/Version.hpp
+          grep FIRMWARE_VERSION Arduino/ESP32/Common/src/Version.hpp
+
+      - name: Build firmware (env universal)
+        working-directory: Arduino/ESP32/RamiFirmware
+        run: pio run -e universal
+
+      - name: Générer le binaire OTA + le factory bin (ESP Web Tools)
+        working-directory: Arduino/ESP32/RamiFirmware
+        run: |
+          set -euo pipefail
+          BUILD=.pio/build/universal
+          BOOT0=$(find ~/.platformio -name boot_app0.bin | head -1)
+          # Binaire OTA (app seule, flashé par HTTPUpdate côté ESP).
+          cp "$BUILD/firmware.bin" rami-universal.bin
+          # Factory bin fusionné (bootloader+partitions+boot_app0+app) pour le
+          # flash USB navigateur à l'offset 0x0.
+          python -m esptool --chip esp32 merge_bin \
+            -o rami-universal-factory.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 "$BUILD/bootloader.bin" \
+            0x8000 "$BUILD/partitions.bin" \
+            0xe000 "$BOOT0" \
+            0x10000 "$BUILD/firmware.bin"
+          ls -la rami-universal*.bin
+
+      - name: Publier la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true # changelog auto (PRs depuis la version précédente)
+          files: |
+            Arduino/ESP32/RamiFirmware/rami-universal.bin
+            Arduino/ESP32/RamiFirmware/rami-universal-factory.bin
+
+      - name: Redéployer la page de flash (Pages) avec le nouveau firmware
+        # Une release créée par GITHUB_TOKEN ne déclenche PAS l'event `release`
+        # d'un autre workflow. On dispatche pages.yml explicitement (workflow_dispatch
+        # EST autorisé via GITHUB_TOKEN) pour que le factory bin + le cache-bust
+        # ?v=<tag> de la page reflètent la nouvelle version.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}"

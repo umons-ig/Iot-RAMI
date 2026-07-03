@@ -1,1 +1,16 @@
 env
+.env
+.env.*
+!.env.example
+!**/.env.example
+.DS_Store
+.claude/
+.agents/
+.codex/
+CLAUDE.md
+.mcp.json
+.mcp
+_bmad
+_bmad/
+_bmad-output/
+umons-sensor-backend-1-feature-RAMI1-dev/.env.development

@@ -1,0 +1,202 @@
+  services:
+    node-db:
+      image: timescale/timescaledb:2.17.2-pg13
+      container_name: iot-rami-db
+      restart: always
+      ports:
+        # Bind localhost uniquement : le backend joint la DB via le réseau Docker
+        # interne (DB_HOST=node-db). Ce mapping ne sert qu'à un accès local
+        # (psql/migrations sur la VM) et NE DOIT PAS être exposé publiquement.
+        - "127.0.0.1:5432:5432"
+      environment:
+        POSTGRES_USER: ${DB_USER}
+        POSTGRES_PASSWORD: ${DB_PASSWORD}
+        POSTGRES_DB: ${DB_NAME}
+      volumes:
+        - db-data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-postgres}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 20s
+      networks:
+        - rami-network
+
+    kafka:
+      image: apache/kafka:3.9.0
+      container_name: iot-rami-kafka
+      restart: always
+      ports:
+        # ⚠️ 9092 = listener PLAINTEXT_HOST, requis par le fog DISTANT
+        # (KAFKA_BROKERS=${SERVER_HOST}:9092). Il NE PEUT PAS être fermé tant que
+        # le lien fog→cloud n'est pas chiffré. PLAINTEXT sans auth = lecture/injection
+        # de mesures par quiconque atteint ce port.
+        # OBLIGATOIRE : restreindre la source au seul fog via le firewall de la VM,
+        # ex. `ufw allow from <IP_FOG> to any port 9092 && ufw deny 9092`.
+        # Fix définitif : tunnel WireGuard fog↔cloud (cf. PLAN_AMELIORATIONS §0.4)
+        # puis binder ce port sur l'interface WireGuard / 127.0.0.1.
+        - "9092:9092"
+      environment:
+        KAFKA_NODE_ID: 1
+        KAFKA_PROCESS_ROLES: "broker,controller"
+        KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+        KAFKA_CONTROLLER_QUORUM_VOTERS: "1@iot-rami-kafka:9093"
+        KAFKA_LISTENERS: "PLAINTEXT://:29092,PLAINTEXT_HOST://:9092,CONTROLLER://:9093"
+        KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://iot-rami-kafka:29092,PLAINTEXT_HOST://${SERVER_HOST}:9092,CONTROLLER://iot-rami-kafka:9093"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        # ─── Activation SASL_SSL côté broker (optionnel) ───────────────────────
+        # Défaut : PLAINTEXT (subnet local de confiance). Pour chiffrer/authentifier
+        # le lien fog→cloud sur un réseau non fiable, l'option la plus simple reste
+        # un tunnel WireGuard (niveau réseau, aucune conf Kafka). Sinon, remplacer le
+        # listener PLAINTEXT_HOST par un listener SASL_SSL :
+        #   KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,SASL_SSL:SASL_SSL,CONTROLLER:PLAINTEXT"
+        #   KAFKA_SASL_ENABLED_MECHANISMS: "SCRAM-SHA-512"
+        #   KAFKA_LISTENERS: "PLAINTEXT://:29092,SASL_SSL://:9092,CONTROLLER://:9093"
+        #   KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://iot-rami-kafka:29092,SASL_SSL://${SERVER_HOST}:9092,CONTROLLER://iot-rami-kafka:9093"
+        # + monter les keystores/truststore et fournir le JAAS config. Voir docs/ETAT_DES_LIEUX.md.
+      healthcheck:
+        test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:29092"]
+        interval: 10s
+        timeout: 10s
+        retries: 10
+        start_period: 30s
+      networks:
+        - rami-network
+
+    node-backend:
+      image: ghcr.io/gaspardmenou/iot-rami-backend:latest
+      container_name: iot-rami-backend
+      restart: always
+      ports:
+        - "3000:3000"
+      environment:
+        NODE_ENV: production
+        NODE_PORT_IN: 3000
+        DB_HOST: node-db
+        DB_PORT: 5432
+        DB_USER: ${DB_USER}
+        DB_PASSWORD: ${DB_PASSWORD}
+        DB_NAME: ${DB_NAME}
+        DB_DIALECT: postgres
+        JWT_SECRET: ${JWT_SECRET}
+        REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET}
+        BCRYPT_SALT_ROUNDS: 10
+        KAFKA_BROKERS: "iot-rami-kafka:29092"
+        FRONTEND_URL: "http://${SERVER_HOST}:8080"
+        # Sécurité Kafka optionnelle (défaut PLAINTEXT local). Voir .env.example.
+        KAFKA_SSL: ${KAFKA_SSL:-}
+        KAFKA_SASL_MECHANISM: ${KAFKA_SASL_MECHANISM:-}
+        KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-}
+        KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD:-}
+      depends_on:
+        node-db:
+          condition: service_healthy
+        kafka:
+          condition: service_healthy
+      healthcheck:
+        test:
+          [
+            "CMD",
+            "node",
+            "-e",
+            "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+          ]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+        start_period: 30s
+      networks:
+        - rami-network
+
+    frontend:
+      image: ghcr.io/gaspardmenou/iot-rami-frontend:latest
+      container_name: iot-rami-frontend
+      restart: always
+      ports:
+        - "8080:80"
+      environment:
+        VITE_APP_BACK_URL: "http://${SERVER_HOST}:3000/api/v1"
+        VITE_SOCKET_URL: "http://${SERVER_HOST}:3000"
+      depends_on:
+        node-backend:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD-SHELL", "wget -qO- http://localhost/ || exit 1"]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+        start_period: 15s
+      networks:
+        - rami-network
+
+    prometheus:
+      image: prom/prometheus:v2.54.1
+      container_name: iot-rami-prometheus
+      restart: always
+      ports:
+        # Bind localhost : Grafana scrape Prometheus via le réseau Docker interne
+        # (prometheus:9090). Inutile d'exposer les métriques brutes publiquement.
+        - "127.0.0.1:9090:9090"
+      volumes:
+        - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+        - ./monitoring/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      depends_on:
+        node-backend:
+          condition: service_healthy
+      networks:
+        - rami-network
+
+    # Alertmanager (§3.2) : reçoit les alertes Prometheus et les route.
+    alertmanager:
+      image: prom/alertmanager:v0.27.0
+      container_name: iot-rami-alertmanager
+      restart: always
+      ports:
+        - "127.0.0.1:9093:9093"
+      volumes:
+        - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      networks:
+        - rami-network
+
+    grafana:
+      image: grafana/grafana:11.3.0
+      container_name: iot-rami-grafana
+      restart: always
+      ports:
+        - "3001:3000"
+      volumes:
+        - grafana-data:/var/lib/grafana
+        # Provisioning as-code (§3.3) : datasource + dashboards automatiques.
+        - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+        - ./monitoring/rami-dashboard.json:/var/lib/grafana/dashboards/rami-dashboard.json:ro
+      environment:
+        GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?Definir GF_SECURITY_ADMIN_PASSWORD dans .env}
+      depends_on:
+        - prometheus
+      networks:
+        - rami-network
+
+    watchtower:
+      # Fork communautaire maintenu (containrrr/watchtower archivé en déc. 2025).
+      # API-compatible : même config, même comportement.
+      image: nickfedor/watchtower:1.18.1
+      container_name: iot-rami-watchtower
+      restart: always
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      environment:
+        DOCKER_API_VERSION: "1.44"
+        WATCHTOWER_POLL_INTERVAL: 300
+        WATCHTOWER_CLEANUP: "true"
+      command: iot-rami-backend iot-rami-frontend
+
+  volumes:
+    db-data:
+    grafana-data:
+
+  networks:
+    rami-network:
+      driver: bridge

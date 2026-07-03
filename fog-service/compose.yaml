@@ -1,0 +1,110 @@
+services:
+  fog-service:
+    image: ghcr.io/gaspardmenou/iot-rami-fog:latest
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      - MQTT_URL=mqtt://mosquitto
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - KAFKA_BROKERS=${KAFKA_BROKERS}
+      # Outbox store-and-forward (Postgres local)
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=${PG_USER:-fog}
+      - PG_PASSWORD=${PG_PASSWORD:-fog}
+      - PG_DATABASE=${PG_DATABASE:-fog_outbox}
+      # Observabilité (§3.1)
+      - METRICS_PORT=9100
+      # Web server de GESTION des ESP (liste, état, OTA/WiFi/MQTT/restart à distance).
+      # MGMT_HOST=0.0.0.0 pour être joignable via le mapping de port ci-dessous.
+      # MGMT_TOKEN OBLIGATOIRE dès qu'il est exposé (il pilote toute la flotte) :
+      # header X-Mgmt-Token. À définir dans le .env.
+      - MGMT_PORT=9200
+      - MGMT_HOST=0.0.0.0
+      # MGMT_PASSWORD : mot de passe admin (login sur la console). MGMT_TOKEN :
+      # secret statique pour scripts/API. Définir au moins l'un des deux dès que
+      # la console est exposée (MGMT_BIND=0.0.0.0).
+      - MGMT_TOKEN=${MGMT_TOKEN}
+      - MGMT_PASSWORD=${MGMT_PASSWORD}
+      # Auto-OTA firmware via GitHub Releases (« Watchtower firmware »). OPT-IN :
+      # désactivé par défaut (en médical, l'OTA automatique doit être explicite).
+      - FIRMWARE_OTA_ENABLED=${FIRMWARE_OTA_ENABLED:-false}
+      - FIRMWARE_REPO=${FIRMWARE_REPO:-GaspardMenou/Iot-RAMI}
+      - FIRMWARE_ENV=${FIRMWARE_ENV:-universal}
+      - FIRMWARE_VERSION=${FIRMWARE_VERSION:-v0.0.0}
+    ports:
+      # Métriques Prometheus du fog, à scraper depuis le cloud (idéalement via
+      # WireGuard). Restreindre la source au firewall si exposé sur le LAN.
+      - "9100:9100"
+      # Console de gestion. Par DÉFAUT sur le localhost du Pi (accès par tunnel SSH :
+      # ssh -L 9200:localhost:9200 pi@<pi>). Pour y accéder depuis le LAN (ex. ton
+      # PC), mettre MGMT_BIND=0.0.0.0 dans le .env -> MGMT_TOKEN OBLIGATOIRE
+      # (l'API pilote toute la flotte) + firewall/WireGuard conseillé.
+      - "${MGMT_BIND:-127.0.0.1}:9200:9200"
+    depends_on:
+      mosquitto:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    container_name: fog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-fog}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-fog}
+      POSTGRES_DB: ${PG_DATABASE:-fog_outbox}
+    volumes:
+      - fog-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    restart: always
+    # Génère le fichier de mots de passe depuis MQTT_USERNAME/MQTT_PASSWORD (.env)
+    # au démarrage, puis lance le broker. Évite un 'passwd' manquant -> 'not
+    # authorised' (rc=5). Les ESP et le fog doivent utiliser CES MÊMES identifiants.
+    command: >
+      sh -c "mosquitto_passwd -b -c /mosquitto/config/passwd \"$$MQTT_USERNAME\" \"$$MQTT_PASSWORD\"
+      && exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - "1883:1883"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mosquitto_sub -u $$MQTT_USERNAME -P $$MQTT_PASSWORD -t '$$SYS/#' -C 1 -W 3 || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+  watchtower:
+    # Fork communautaire maintenu (containrrr/watchtower archivé en déc. 2025).
+    # API-compatible : même config, même comportement. Multi-arch (amd64/arm64).
+    image: nickfedor/watchtower:1.18.1
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - DOCKER_API_VERSION=1.44
+      - WATCHTOWER_CLEANUP=true
+volumes:
+  fog-db-data:

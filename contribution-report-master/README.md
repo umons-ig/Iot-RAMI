@@ -33,6 +33,7 @@ Puis laissez vous guider par le script.
 - RAMI 0 : Contribution de Thomas, 2023-04-17 - 2023-09-15 (5 mois)
 - RAMI 0 : Contribution de Lilian, 2023-05-08 - 2023-08-08 (3 mois)
 - RAMI 1.0 : Contribution de Cyril,  2024-04-08 - 2024-07-08 (3 mois)
+- RAMI 1.0 : Contribution de Gaspard
 
 ---
 ### RAMI 1.0 : Contribution de Cyril, 2024-04-08 - 2024-07-08 (3 mois)
@@ -70,3 +71,15 @@ python3 ./update_readme.py [nom_du_rapport.pdf]
 
 ##### Informatique (Frontend)
 - Favorisez la réutilisabilité de vos composants web.
+
+---
+### RAMI 1.0 : Contribution de Gaspard
+- Refonte de l'architecture temps réel : remplacement de la connexion MQTT directe navigateur par un pipeline WebSocket (Socket.io) sécurisé via JWT
+- Mise en place de l'architecture fog/cloud : fog-service Node.js sur Raspberry Pi (MQTT → Kafka batch), sessions pilotées par le fog
+- Support multi-mesures (ECG, temperature, humidite) avec datasets dynamiques dans le graphique
+- Auto-decouverte des capteurs inconnus via MQTT wildcard `#`
+- Mise à jour des sketches Arduino (DHT22, ECG AD8232) : format multi-mesures, portail captif WiFiManager, PING periodique
+- Simulateur Python : nouveau protocole fog (PING/START/ACK/STOP), arguments CLI, Ctrl+C propre
+- CI/CD GitHub Actions : lint → test → docker build → push GHCR → déploiement auto Watchtower
+- Tests : 348 tests Jest (backend) + 137 tests Vitest (frontend)
+- Documentation complète : MQTT, Kafka, API REST, scenario de demo, rapport de contribution

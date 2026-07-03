@@ -1,0 +1,186 @@
+@import './base.css';
+
+#app {
+    margin: 0 auto;
+    font-weight: normal;
+}
+
+a {
+    text-decoration: none;
+    color: var(--color-primary);
+    transition: color 0.2s, opacity 0.2s;
+}
+
+a:hover {
+    color: var(--color-primary-hover);
+    opacity: 0.85;
+}
+
+button {
+    background-color: var(--color-secondary);
+    color: var(--color-text);
+    border: 1px solid var(--color-border-bright);
+    border-radius: 0;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+button:hover {
+    background-color: var(--color-secondary-hover);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+input, select, textarea {
+    font-family: var(--font-mono);
+    background: var(--color-surface-secondary);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: 0;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.85rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+input::placeholder, textarea::placeholder {
+    color: var(--color-text-muted);
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-glow), 0 0 12px var(--color-primary-dim);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--color-text);
+    line-height: 1.2;
+    font-family: var(--font-display);
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+p {
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+/* ── Utilitaires ── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    border-radius: 0;
+}
+
+.badge-success {
+    background: var(--color-success-dim);
+    color: var(--color-success);
+    border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+}
+
+.badge-danger {
+    background: var(--color-danger-dim);
+    color: var(--color-danger);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+}
+
+.badge-primary {
+    background: var(--color-primary-dim);
+    color: var(--color-primary);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+/* ── Cartes ── */
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0;
+    padding: 1.25rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    border-color: var(--color-border-bright);
+}
+
+/* ── Boutons d'action ── */
+.btn-primary {
+    background: var(--color-primary);
+    color: var(--color-text-second);
+    border: 1px solid var(--color-primary);
+    padding: 0.55rem 1.2rem;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.15s, box-shadow 0.15s;
+    font-family: var(--font-mono);
+    border-radius: 0;
+}
+
+.btn-primary:hover {
+    background: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
+    box-shadow: 0 0 16px var(--color-primary-glow);
+    color: var(--color-text-second);
+}
+
+.btn-danger {
+    background: var(--color-danger-dim);
+    color: var(--color-danger);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+    padding: 0.55rem 1.2rem;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 0.15s, box-shadow 0.15s;
+    font-family: var(--font-mono);
+    border-radius: 0;
+}
+
+.btn-danger:hover {
+    background: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+}
+
+/* ── Empty state ── */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.05em;
+    border: 1px dashed var(--color-border-bright);
+    text-transform: uppercase;
+}
+
+.user-detail {
+    font-size: 0.9rem;
+    color: var(--color-text);
+    font-family: var(--font-mono);
+}

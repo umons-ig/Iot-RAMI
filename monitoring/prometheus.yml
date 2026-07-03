@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 15s
+
+# Règles d'alerte (§3.2) et routage vers Alertmanager.
+rule_files:
+  - "alert.rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  - job_name: 'rami-backend'
+    static_configs:
+      - targets: ['node-backend:3000']
+    metrics_path: '/metrics'
+
+  # Nœud fog (Raspberry Pi distant) — observabilité store-and-forward (§3.1).
+  # Le fog expose /metrics sur METRICS_PORT (défaut 9100). Renseigner l'hôte/port
+  # réels du fog via la variable d'env FOG_METRICS_TARGET (ex. 10.0.0.2:9100) ;
+  # nécessite que Prometheus (cloud) puisse joindre le fog — idéalement via le
+  # tunnel WireGuard (cf. §0.4). Laisser commenté tant que la cible n'est pas définie.
+  # - job_name: 'rami-fog'
+  #   static_configs:
+  #     - targets: ['${FOG_METRICS_TARGET}']
+  #   metrics_path: '/metrics'

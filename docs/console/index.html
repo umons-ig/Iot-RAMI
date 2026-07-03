@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAMI · Configurer &amp; tester un ESP32</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Martian+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root{--color-background:#070600;--color-surface:#0f0c00;--color-surface-secondary:#181300;--color-primary:#ff9f0a;--color-primary-hover:#e08c00;--color-primary-glow:rgba(255,159,10,.18);--color-text:#f0d89a;--color-text-muted:#7a6535;--color-border:#241c00;--color-border-bright:#3a2e00;--color-success:#39ff14;--color-danger:#ff4040;--color-warning:#ffcc00}
+:root[data-theme=green]{--color-background:#000a02;--color-surface:#021004;--color-surface-secondary:#04190a;--color-primary:#39ff6e;--color-primary-hover:#28e85a;--color-primary-glow:rgba(57,255,110,.2);--color-text:#b6ffce;--color-text-muted:#2f8f46;--color-border:#093a17;--color-border-bright:#0e5a24;--color-success:#39ff14;--color-danger:#ff5a5a;--color-warning:#d8ff00}
+:root[data-theme=light]{color-scheme:light;--color-background:#f2ead8;--color-surface:#ede3cc;--color-surface-secondary:#e5d9bc;--color-primary:#b86e00;--color-primary-hover:#9a5c00;--color-primary-glow:rgba(184,110,0,.22);--color-text:#1a1200;--color-text-muted:#7a6030;--color-border:#c8b896;--color-border-bright:#b0996e;--color-success:#1a8a00;--color-danger:#cc2200;--color-warning:#b88000}
+:root{--bg:var(--color-background);--panel:var(--color-surface);--line:var(--color-border);--line2:var(--color-border-bright);--phosphor:var(--color-primary);--phosphor-dim:var(--color-primary-hover);--ph:var(--color-primary);--phd:var(--color-primary-hover);--text:var(--color-text);--muted:var(--color-text-muted);--ok:var(--color-success);--bad:var(--color-danger);--warn:var(--color-warning);--field:color-mix(in srgb,var(--color-surface) 60%,#000)}
+.theme-switch{position:fixed;top:.8rem;right:.8rem;z-index:80}
+.theme-switch select{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:.3rem .5rem;font-family:inherit;font-size:.72rem;cursor:pointer}
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh;
+        background: radial-gradient(circle at 50% 0%, var(--color-surface-secondary) 0%, var(--bg) 60%),
+          repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb,var(--color-primary) 2.5%,transparent) 3px 4px);
+        color: var(--text); font-family: "Martian Mono", ui-monospace, monospace;
+        padding: 2rem 1rem; display: flex; justify-content: center;
+      }
+      main { width: 100%; max-width: 680px; }
+      h1 {
+        font-family: "Big Shoulders Display", sans-serif; font-weight: 800; font-size: 2.3rem;
+        margin: 0; color: var(--phosphor); text-shadow: 0 0 18px color-mix(in srgb,var(--color-primary) 45%,transparent);
+      }
+      .sub { color: var(--muted); font-size: .8rem; margin: .2rem 0 1.5rem; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.25rem 1.4rem; margin-bottom: 1rem; }
+      .card h2 { font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: var(--phosphor-dim); margin: 0 0 .8rem; }
+      label { display: block; font-size: .72rem; color: var(--muted); margin: .5rem 0 .15rem; }
+      input[type=text], input[type=password] {
+        width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--line);
+        border-radius: 7px; padding: .5rem .6rem; font: inherit; font-size: .85rem;
+      }
+      button {
+        font-family: inherit; font-weight: 600; font-size: .85rem; cursor: pointer;
+        background: var(--field); color: var(--phosphor); border: 1px solid var(--phosphor-dim);
+        border-radius: 7px; padding: .5rem 1rem; margin-top: .8rem;
+      }
+      button:hover { background: color-mix(in srgb,var(--color-primary) 10%,transparent); }
+      button:disabled { opacity: .4; cursor: not-allowed; }
+      button.primary { background: var(--phosphor-dim); color: var(--field); border-color: var(--phosphor); }
+      .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1rem; }
+      .sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .4rem; }
+      .sensors label { display: flex; align-items: center; gap: .4rem; color: var(--text); font-size: .8rem; margin: 0; cursor: pointer; }
+      .status { font-size: .78rem; padding: .3rem .7rem; border-radius: 20px; border: 1px solid var(--line); }
+      .ok { color: var(--phosphor); } .ko { color: var(--color-danger); }
+      #log { background: var(--field); border: 1px solid var(--line); border-radius: 7px; padding: .6rem; font-size: .72rem; color: var(--muted); height: 110px; overflow: auto; white-space: pre-wrap; }
+      .meas { display: grid; grid-template-columns: 1fr auto; gap: .25rem .8rem; font-size: .9rem; }
+      .meas .v { color: var(--phosphor); text-align: right; }
+      .hint { font-size: .72rem; color: var(--muted); margin-top: .6rem; border-left: 3px solid var(--phosphor-dim); padding-left: .6rem; }
+      .unsupported { color: var(--color-danger); font-size: .85rem; }
+      a { color: var(--phosphor-dim); }
+    </style>
+  </head>
+  <body>
+<div class="theme-switch"><select id="theme" aria-label="Theme"><option value="amber">Ambre</option><option value="green">Vert</option><option value="light">Clair</option></select></div>
+    <main>
+      <h1>RAMI · CONSOLE</h1>
+      <div class="sub">Configurer &amp; tester un ESP32 en USB — directement dans le navigateur</div>
+
+      <div class="card">
+        <div class="row">
+          <button id="connect" class="primary">🔌 Connecter (USB)</button>
+          <button id="disconnect" disabled>Déconnecter</button>
+          <span id="status" class="status ko">déconnecté</span>
+        </div>
+        <p id="nosupport" class="unsupported" style="display:none">
+          Web Serial non supporté — utilise <b>Chrome</b>, <b>Edge</b> ou <b>Opera</b>.
+        </p>
+        <div class="hint">Flashe d'abord le firmware via la <a href="../flash/">page de flash</a>, puis reviens ici. Ferme les autres onglets/moniteurs série (le port ne peut être ouvert qu'une fois).</div>
+      </div>
+
+      <div class="card">
+        <h2>Appareil</h2>
+        <label>Nom du capteur (définit le topic MQTT <code>&lt;nom&gt;-topic/sensor</code>)</label>
+        <input id="dname" type="text" placeholder="ex. esp32-salle1" />
+        <div class="row">
+          <button id="applyName" disabled>Appliquer le nom</button>
+          <button id="info" disabled>Rafraîchir l'info</button>
+        </div>
+        <div id="deviceinfo" class="hint" style="margin-top:.6rem">—</div>
+      </div>
+
+      <div class="card">
+        <h2>WiFi</h2>
+        <div class="grid2">
+          <div><label>SSID</label><input id="wssid" type="text" /></div>
+          <div><label>Mot de passe</label><input id="wpass" type="password" /></div>
+        </div>
+        <button id="applyWifi" disabled>Appliquer le WiFi</button>
+      </div>
+
+      <div class="card">
+        <h2>MQTT</h2>
+        <div class="grid2">
+          <div><label>Broker (IP)</label><input id="mbroker" type="text" placeholder="192.168.10.4" /></div>
+          <div><label>Utilisateur</label><input id="muser" type="text" /></div>
+          <div><label>Mot de passe</label><input id="mpass" type="password" /></div>
+        </div>
+        <button id="applyMqtt" disabled>Appliquer le MQTT</button>
+      </div>
+
+      <div class="card">
+        <h2>Capteurs</h2>
+        <div class="sensors" id="sensorList"></div>
+        <button id="applySensors" disabled>Appliquer les capteurs</button>
+        <div id="pinConfig" style="margin-top:1rem"></div>
+        <button id="applyPins" disabled>Appliquer les pins</button>
+        <div class="hint">Capteurs et pins sont pris en compte après un <b>redémarrage</b>. Les pins non renseignées gardent la valeur par défaut. (Les capteurs I²C — bmp280, bh1750, sgp30, mlx90614, max30102 — utilisent le bus I²C standard, pas de pin à régler ici.)</div>
+      </div>
+
+      <div class="card">
+        <h2>Test en direct</h2>
+        <div class="row">
+          <button id="readOnce" disabled>Lire une fois</button>
+          <button id="readLive" disabled>▶ Live</button>
+          <button id="restart" disabled>⟳ Redémarrer l'ESP</button>
+        </div>
+        <div id="measures" class="meas" style="margin-top:.8rem">—</div>
+      </div>
+
+      <div class="card">
+        <h2>Mise à jour firmware (OTA)</h2>
+        <label>Version</label>
+        <select id="otaVersion"><option>chargement…</option></select>
+        <div class="row" style="margin-top:.6rem">
+          <button id="otaUpdate" disabled>⬆ Mettre à jour par OTA</button>
+        </div>
+        <div class="hint">L'ESP (déjà sur WiFi) télécharge et flashe lui-même la nouvelle app → <b>garde</b> WiFi/MQTT/capteurs/pins. Il redémarre (la connexion série se coupe). Nécessite <code>WiFi : ✅</code>.</div>
+      </div>
+
+      <div class="card">
+        <h2>Journal série</h2>
+        <div id="log"></div>
+      </div>
+    </main>
+
+    <script>
+      const SENSORS = ["dht22","bmp280","ad8232","hcsr04","mr60bha2","max30102","mlx90614","gsr","pir","bh1750","contact","sgp30"];
+      // Rôles de pins par capteur GPIO (les I²C/UART n'en ont pas ici).
+      const PIN_ROLES = { dht22:["data"], ad8232:["out","lo_plus","lo_minus"], hcsr04:["trig","echo"], gsr:["pin"], pir:["pin"], contact:["pin"] };
+      const $ = (id) => document.getElementById(id);
+      let port, writer, reader, liveTimer = null, rxBuffer = "", currentPins = {}, gotInfo = false;
+      // Échappe les données venant de l'ESP avant injection dans le DOM (anti-XSS :
+      // le nom du capteur est défini par l'utilisateur et rejoué dans 'info').
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+      // UI capteurs (cases à cocher)
+      $("sensorList").innerHTML = SENSORS.map(s =>
+        `<label><input type="checkbox" value="${s}"> ${s}</label>`).join("");
+
+      // Champs de pins pour les capteurs GPIO sélectionnés.
+      function renderPins() {
+        const checked = [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value);
+        const html = checked.filter(s => PIN_ROLES[s]).map(s =>
+          `<div style="margin:.35rem 0;font-size:.82rem"><b style="color:var(--phosphor-dim)">${s}</b> ` +
+          PIN_ROLES[s].map(role => {
+            const v = (currentPins[s] && currentPins[s][role] != null) ? currentPins[s][role] : "";
+            return `<label style="display:inline-block;margin:0 .5rem;color:var(--muted)">${role} <input type="text" inputmode="numeric" style="width:60px" id="pin-${s}-${role}" value="${esc(v)}"></label>`;
+          }).join("") + `</div>`).join("");
+        $("pinConfig").innerHTML = html || '<span style="font-size:.72rem;color:var(--muted)">Aucun capteur à pins GPIO sélectionné.</span>';
+      }
+      document.querySelectorAll("#sensorList input").forEach(c => c.addEventListener("change", renderPins));
+      renderPins();
+
+      function log(msg) { const l = $("log"); l.textContent += msg + "\n"; l.scrollTop = l.scrollHeight; }
+      function setConnected(on) {
+        $("status").textContent = on ? "connecté" : "déconnecté";
+        $("status").className = "status " + (on ? "ok" : "ko");
+        ["disconnect","info","applyName","applyWifi","applyMqtt","applySensors","applyPins","readOnce","readLive","restart","otaUpdate"].forEach(id => $(id).disabled = !on);
+        $("connect").disabled = on;
+      }
+
+      async function send(obj) {
+        if (!writer) return;
+        await writer.write(new TextEncoder().encode(JSON.stringify(obj) + "\n"));
+        log("→ " + JSON.stringify(obj));
+      }
+
+      function handleLine(line) {
+        line = line.trim();
+        if (!line) return;
+        log("← " + line); // log TOUT (y compris logs debug) pour visibilité
+        let msg;
+        try { msg = JSON.parse(line); } catch { return; } // logs non-JSON : affichés mais ignorés
+        if (!msg.resp) return;
+        if (msg.resp === "info") {
+          gotInfo = true;
+          $("deviceinfo").innerHTML =
+            `version : <b style="color:var(--phosphor)">${esc(msg.version||"?")}</b><br>` +
+            `nom : <b style="color:var(--phosphor)">${esc(msg.name||"?")}</b><br>` +
+            `capteurs : <b>${esc(msg.sensors||"(aucun)")}</b><br>` +
+            `IP : ${esc(msg.ip||"?")} · WiFi : ${msg.connected ? "✅" : "❌"}`;
+          // pré-remplir le nom connu
+          if (msg.name && msg.name !== "?" && !$("dname").value) $("dname").value = msg.name;
+          // pré-cocher les capteurs connus
+          const active = (msg.sensors||"").split(",").map(s=>s.trim());
+          document.querySelectorAll("#sensorList input").forEach(c => c.checked = active.includes(c.value));
+          // pré-remplir les pins connues
+          try { currentPins = JSON.parse(msg.pins || "{}"); } catch { currentPins = {}; }
+          renderPins();
+        } else if (msg.resp === "read") {
+          $("measures").innerHTML = (msg.measures && msg.measures.length)
+            ? msg.measures.map(m => `<span>${esc(m.type)}</span><span class="v">${(+m.value).toFixed(2)}</span>`).join("")
+            : '<span style="color:var(--muted)">aucune mesure (capteur inactif ? redémarre après sélection)</span>';
+        }
+      }
+
+      async function readLoop() {
+        const dec = new TextDecoder();
+        try {
+          while (port && port.readable) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            rxBuffer += dec.decode(value);
+            let nl;
+            while ((nl = rxBuffer.indexOf("\n")) >= 0) {
+              handleLine(rxBuffer.slice(0, nl));
+              rxBuffer = rxBuffer.slice(nl + 1);
+            }
+          }
+        } catch (e) { log("⚠️ lecture: " + e.message); }
+        finally { try { reader.releaseLock(); } catch (_) {} } // libère le lock en sortie
+      }
+
+      $("connect").onclick = async () => {
+        try {
+          port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 115200 });
+          // Reset l'ESP pour démarrer sur l'APP (pas le bootloader) : RTS=EN,
+          // DTR=IO0. Pulse de reset avec IO0 haut. (Sinon l'ouverture du port
+          // peut laisser la puce en bootloader -> aucune sortie.)
+          try {
+            await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+            await new Promise(r => setTimeout(r, 150));
+            await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+          } catch (e) { log("(setSignals non supporté : " + e.message + ")"); }
+          writer = port.writable.getWriter();
+          reader = port.readable.getReader();
+          rxBuffer = ""; // repart propre (pas de ligne partielle d'une session précédente)
+          setConnected(true);
+          log("✅ port ouvert (115200) — reset ESP, attente du boot…");
+          readLoop();
+          // Le firmware met 1-3 s à booter : on (re)demande l'info plusieurs fois
+          // jusqu'à obtenir une réponse.
+          gotInfo = false;
+          [2500, 4500, 7000, 10000].forEach((t) =>
+            setTimeout(() => { if (!gotInfo) send({ cmd: "info" }); }, t));
+        } catch (e) { log("⚠️ connexion: " + e.message); }
+      };
+
+      $("disconnect").onclick = async () => {
+        try {
+          if (liveTimer) { clearInterval(liveTimer); liveTimer = null; $("readLive").textContent = "▶ Live"; }
+          // reader.cancel() fait sortir readLoop, qui libère le lock dans son finally.
+          if (reader) { try { await reader.cancel(); } catch (_) {} }
+          if (writer) { try { writer.releaseLock(); } catch (_) {} }
+          if (port) await port.close();
+        } catch (e) { log("⚠️ " + e.message); }
+        reader = writer = port = undefined; // refs propres pour une reconnexion
+        setConnected(false); log("port fermé");
+      };
+
+      $("info").onclick = () => send({ cmd: "info" });
+      $("applyName").onclick = () => send({ cmd: "set_name", name: $("dname").value });
+      $("applyWifi").onclick = () => send({ cmd: "set_wifi", ssid: $("wssid").value, pass: $("wpass").value });
+      $("applyMqtt").onclick = () => send({ cmd: "set_mqtt", broker: $("mbroker").value, user: $("muser").value, pass: $("mpass").value });
+      $("applySensors").onclick = () => {
+        const list = [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value).join(",");
+        send({ cmd: "set_sensors", sensors: list });
+      };
+      $("applyPins").onclick = () => {
+        const pins = {};
+        [...document.querySelectorAll("#sensorList input:checked")].map(c => c.value)
+          .filter(s => PIN_ROLES[s]).forEach(s => {
+            PIN_ROLES[s].forEach(role => {
+              const el = $(`pin-${s}-${role}`);
+              if (el && el.value.trim() !== "") {
+                pins[s] = pins[s] || {};
+                pins[s][role] = parseInt(el.value, 10);
+              }
+            });
+          });
+        send({ cmd: "set_pins", pins });
+      };
+      $("readOnce").onclick = () => send({ cmd: "read" });
+      $("readLive").onclick = () => {
+        if (liveTimer) { clearInterval(liveTimer); liveTimer = null; $("readLive").textContent = "▶ Live"; }
+        else { liveTimer = setInterval(() => send({ cmd: "read" }), 1000); $("readLive").textContent = "⏸ Stop"; }
+      };
+      $("restart").onclick = () => send({ cmd: "restart" });
+
+      // ── Mise à jour OTA (l'ESP télécharge + flashe l'app lui-même, garde la config) ──
+      let otaVersions = [];
+      (async function loadOtaVersions() {
+        try {
+          const res = await fetch("../flash/versions.json?cb=" + Date.now());
+          otaVersions = await res.json();
+          const sel = $("otaVersion");
+          sel.innerHTML = otaVersions
+            .map((v, i) => `<option value="${i}">${esc(v.tag)}${i === 0 ? " (latest)" : ""}</option>`)
+            .join("") || "<option>aucune version</option>";
+        } catch {
+          $("otaVersion").innerHTML = "<option>versions indisponibles</option>";
+        }
+      })();
+      $("otaUpdate").onclick = () => {
+        const v = otaVersions[+$("otaVersion").value];
+        if (!v) { log("⚠️ aucune version sélectionnée"); return; }
+        // Binaire app servi par Pages (même origine, HTTPS) -> l'ESP le flashe via OTA.
+        const url = new URL(
+          "../flash/versions/" + encodeURIComponent(v.tag) + "/rami-universal.bin",
+          location.href,
+        ).href;
+        log("⬆ OTA vers " + v.tag + " — l'ESP va télécharger, flasher puis redémarrer…");
+        send({ cmd: "ota", url });
+      };
+
+      if (!("serial" in navigator)) { $("nosupport").style.display = "block"; $("connect").disabled = true; }
+    </script>
+  <script>(function(){var k='ramiTheme';var t=localStorage.getItem(k)||'amber';document.documentElement.dataset.theme=t;var s=document.getElementById('theme');if(s){s.value=t;s.onchange=function(){localStorage.setItem(k,s.value);document.documentElement.dataset.theme=s.value}}})();</script>
+</body>
+</html>
