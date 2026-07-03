@@ -1,0 +1,32 @@
+# .gitleaksignore — empreintes de secrets HISTORIQUES autorisées.
+#
+# Ces 19 findings sont des mots de passe WiFi/MQTT commités dans d'anciens
+# sketchs ESP32 et scripts de test (2024–2026), avant l'usage de WiFiManager
+# et de la config runtime. Les réseaux/brokers concernés sont OBSOLÈTES
+# (réseaux de test jetables, brokers recréés) — aucun n'est plus actif.
+#
+# On ignore par EMPREINTE (commit:file:rule:line), pas par chemin : tout
+# NOUVEAU secret produit une nouvelle empreinte et reste donc détecté.
+#
+# Révélé au 1er vrai scan gitleaks après migration vers l'orga umons-ig
+# (l'ancienne gitleaks-action échouait sur la licence avant de scanner).
+
+2474c77a70bef9c4494185318d84cbae4757d071:umons-sensor-backend-1-feature-RAMI1-dev/src/utils/mqttConstant.ts:generic-api-key:14
+249ed0c6a66ffd678db25598135594e15f37cd8d:Arduino/ESP32/DHT22/src/SpecificConstants.cpp:generic-api-key:19
+45bee8ea1fcd6c18cd3713e1e25856f6727f7ee3:Arduino/ESP32/DHT22/SpecificConstants.cpp:generic-api-key:19
+4ef7671ac18e19b74a03d700f0d12b631537d76e:sensor_dummy_mqtt/sketch_dec17a/SpecificConstants.cpp:generic-api-key:19
+4ef7671ac18e19b74a03d700f0d12b631537d76e:sensor_dummy_mqtt/sketch_dec17a/SpecificConstants.cpp:generic-api-key:57
+4ef7671ac18e19b74a03d700f0d12b631537d76e:sensors-over-mqtt-master/ESP32-ht/ESP32-ht.ino:generic-api-key:8
+a3301f68e1bf7012706102db29089ad3e9c9a690:python-simulator-over-mqtt-master/brokerInformator.py:generic-api-key:55
+a3301f68e1bf7012706102db29089ad3e9c9a690:python-simulator-over-mqtt-master/brokerInformator.py:generic-api-key:79
+a3301f68e1bf7012706102db29089ad3e9c9a690:sensors-over-mqtt-master/esp32-mqtt/SpecificConstants.cpp:generic-api-key:57
+a3301f68e1bf7012706102db29089ad3e9c9a690:sensors-over-mqtt-master/lora-mqtt/SpecificConstants.cpp:generic-api-key:57
+cc521ab04ab8b229503b9b543adc2ccc6461a44e:Arduino/ESP32/BME280/SpecificConstants.cpp:generic-api-key:19
+cc521ab04ab8b229503b9b543adc2ccc6461a44e:Arduino/ESP32/BME280/SpecificConstants.cpp:generic-api-key:57
+cfc19060bf7b0729fcb0e0181da59c455fd68ee3:sensor_dummy_mqtt/SpecificConstants.cpp:generic-api-key:57
+cfc19060bf7b0729fcb0e0181da59c455fd68ee3:sensors-over-mqtt-master/test.ino:generic-api-key:11
+d105c2fb7a07cff5961292662ee60421e1261ff7:Arduino/ESP32/HCSR04/src/SpecificConstants.cpp:generic-api-key:19
+d1a844f23caa77cd56288ad4cacd22d18d72700e:Arduino/ESP32/AD8232/SpecificConstants.cpp:generic-api-key:19
+d1a844f23caa77cd56288ad4cacd22d18d72700e:Arduino/ESP32/BME280/SpecificConstants.cpp:generic-api-key:19
+d1a844f23caa77cd56288ad4cacd22d18d72700e:Arduino/ESP32/DHT22/SpecificConstants.cpp:generic-api-key:19
+f17b9bf1c6e1e6e23ac942c20ac13799f606e23b:sensors-over-mqtt-master/test/test.ino:generic-api-key:8
