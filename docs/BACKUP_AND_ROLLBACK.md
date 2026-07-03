@@ -62,11 +62,11 @@ La CI pousse aussi un tag immuable par commit (`:<sha>`). Pour revenir en arriè
 
 ```bash
 # 1. Identifier le SHA de la version saine (GHCR ou historique git)
-PREV=ghcr.io/gaspardmenou/iot-rami-backend:<sha_precedent>
+PREV=ghcr.io/umons-ig/iot-rami-backend:<sha_precedent>
 
 # 2. Re-taguer en :latest (ou en :stable, cf. ci-dessous) et redéployer
 docker pull "$PREV"
-docker tag "$PREV" ghcr.io/gaspardmenou/iot-rami-backend:latest
+docker tag "$PREV" ghcr.io/umons-ig/iot-rami-backend:latest
 docker compose up -d node-backend
 ```
 
@@ -78,7 +78,7 @@ Plutôt que de laisser Watchtower suivre `:latest`, le faire suivre un tag
 ```yaml
 # docker-compose.yml — exemple
 node-backend:
-  image: ghcr.io/gaspardmenou/iot-rami-backend:stable
+  image: ghcr.io/umons-ig/iot-rami-backend:stable
 watchtower:
   # surveille uniquement les images :stable
   command: iot-rami-backend iot-rami-frontend
@@ -87,10 +87,10 @@ watchtower:
 Promotion d'une version validée :
 
 ```bash
-docker pull ghcr.io/gaspardmenou/iot-rami-backend:<sha_valide>
-docker tag  ghcr.io/gaspardmenou/iot-rami-backend:<sha_valide> \
-            ghcr.io/gaspardmenou/iot-rami-backend:stable
-docker push ghcr.io/gaspardmenou/iot-rami-backend:stable
+docker pull ghcr.io/umons-ig/iot-rami-backend:<sha_valide>
+docker tag  ghcr.io/umons-ig/iot-rami-backend:<sha_valide> \
+            ghcr.io/umons-ig/iot-rami-backend:stable
+docker push ghcr.io/umons-ig/iot-rami-backend:stable
 ```
 
 > Ce changement de politique n'est **pas** appliqué automatiquement (il modifie

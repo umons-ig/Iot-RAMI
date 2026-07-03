@@ -17,7 +17,7 @@ Build local : `pio run -e <env>` (envs : `dht22`, `medical`, `domotique`,
 
 ## 2. Flasher (USB, navigateur)
 
-Page **GitHub Pages** : <https://gaspardmenou.github.io/Iot-RAMI/flash/> (ESP Web
+Page **GitHub Pages** : <https://umons-ig.github.io/Iot-RAMI/flash/> (ESP Web
 Tools / Web Serial — **Chrome/Edge/Opera**, HTTPS).
 
 - **Sélecteur de version** (N dernières releases, bundlées sur Pages par la CI) +
@@ -37,7 +37,7 @@ pour la config. Maintenir **BOOT/GPIO0** au démarrage réinitialise les réglag
 
 ## 3. Configurer & tester (console USB)
 
-Page <https://gaspardmenou.github.io/Iot-RAMI/console/> (Web Serial) ↔ console
+Page <https://umons-ig.github.io/Iot-RAMI/console/> (Web Serial) ↔ console
 **série JSON** du firmware. Permet, sans IDE :
 
 - **info** : version, nom, capteurs, pins, IP, état WiFi ;
@@ -97,7 +97,7 @@ servent alors la nouvelle version **automatiquement**.
 | `MGMT_TOKEN` | secret statique (scripts/API) | *(vide)* |
 | `MGMT_BIND` | interface d'écoute `:9200` | `127.0.0.1` |
 | `FIRMWARE_OTA_ENABLED` | auto-OTA par appareil | `false` |
-| `FIRMWARE_REPO` / `FIRMWARE_ENV` | dépôt / env du binaire | `GaspardMenou/Iot-RAMI` / `universal` |
+| `FIRMWARE_REPO` / `FIRMWARE_ENV` | dépôt / env du binaire | `umons-ig/Iot-RAMI` / `universal` |
 | `FIRMWARE_POLL_INTERVAL_MS` | fréquence de check des releases | `3600000` |
 | `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | outbox Postgres | `fog` / `fog` / `fog_outbox` |
 

@@ -118,8 +118,8 @@ Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le
 |---------|-------|-----------------------|------|
 | `node-db` | TimescaleDB / PostgreSQL 13 | `5432` | Base de données (hypertable `SensorData`) |
 | `kafka` | `apache/kafka:3.9.0` (KRaft, sans Zookeeper) | `9092` | Bus de messages `sensor-data` |
-| `node-backend` | `ghcr.io/gaspardmenou/iot-rami-backend` | `3000` | API REST + WebSocket + consumer Kafka |
-| `frontend` | `ghcr.io/gaspardmenou/iot-rami-frontend` (Nginx) | `8080→80` | SPA Vue 3 |
+| `node-backend` | `ghcr.io/umons-ig/iot-rami-backend` | `3000` | API REST + WebSocket + consumer Kafka |
+| `frontend` | `ghcr.io/umons-ig/iot-rami-frontend` (Nginx) | `8080→80` | SPA Vue 3 |
 | `prometheus` | `prom/prometheus` | `9090` | Scraping des métriques |
 | `grafana` | `grafana/grafana` | `3001→3000` | Dashboards |
 | `watchtower` | `nickfedor/watchtower` | — | Auto-déploiement (poll GHCR toutes les 300 s) — fork maintenu de Watchtower |
@@ -131,7 +131,7 @@ Le projet est entièrement conteneurisé et se déploie sur **deux hôtes** : le
 | Service | Image | Port | Rôle |
 |---------|-------|------|------|
 | `mosquitto` | `eclipse-mosquitto:2.0.20` | `1883` | Broker MQTT local (capteurs ↔ fog) |
-| `fog-service` | `ghcr.io/gaspardmenou/iot-rami-fog` | — | Bridge MQTT → Kafka + buffer |
+| `fog-service` | `ghcr.io/umons-ig/iot-rami-fog` | — | Bridge MQTT → Kafka + buffer |
 | `fog-postgres` | `postgres:16-alpine` | — | Store-and-forward persistant (outbox) si le cloud est injoignable |
 | `watchtower` | `nickfedor/watchtower:1.18.1` | — | Auto-déploiement de l'image fog (fork maintenu) |
 
@@ -186,4 +186,4 @@ La CI pousse les images sur **GHCR** (publiques). Sur chaque hôte, **Watchtower
 ## CI/CD
 
 Pipeline GitHub Actions : lint → test → docker build → push vers GHCR → déploiement auto via Watchtower sur VM.
-Images Docker : `ghcr.io/gaspardmenou/iot-rami-backend`, `ghcr.io/gaspardmenou/iot-rami-frontend`, `ghcr.io/gaspardmenou/iot-rami-fog`
+Images Docker : `ghcr.io/umons-ig/iot-rami-backend`, `ghcr.io/umons-ig/iot-rami-frontend`, `ghcr.io/umons-ig/iot-rami-fog`

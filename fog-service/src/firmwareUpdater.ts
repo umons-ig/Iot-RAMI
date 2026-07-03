@@ -54,7 +54,7 @@ export function pickFirmwareAsset(
 }
 
 export interface FirmwareUpdaterOptions {
-  repo: string; // "GaspardMenou/Iot-RAMI"
+  repo: string; // "umons-ig/Iot-RAMI"
   envName: string; // "universal"
   intervalMs: number;
   // Mode RECOMMANDÉ (par appareil) : remonte le tag de la dernière release à

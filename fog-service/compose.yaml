@@ -1,6 +1,6 @@
 services:
   fog-service:
-    image: ghcr.io/gaspardmenou/iot-rami-fog:latest
+    image: ghcr.io/umons-ig/iot-rami-fog:latest
     restart: unless-stopped
     mem_limit: 512m
     environment:
@@ -31,7 +31,7 @@ services:
       # Auto-OTA firmware via GitHub Releases (« Watchtower firmware »). OPT-IN :
       # désactivé par défaut (en médical, l'OTA automatique doit être explicite).
       - FIRMWARE_OTA_ENABLED=${FIRMWARE_OTA_ENABLED:-false}
-      - FIRMWARE_REPO=${FIRMWARE_REPO:-GaspardMenou/Iot-RAMI}
+      - FIRMWARE_REPO=${FIRMWARE_REPO:-umons-ig/Iot-RAMI}
       - FIRMWARE_ENV=${FIRMWARE_ENV:-universal}
       - FIRMWARE_VERSION=${FIRMWARE_VERSION:-v0.0.0}
     ports:

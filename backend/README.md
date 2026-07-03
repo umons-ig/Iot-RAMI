@@ -169,6 +169,6 @@ Compte de test (seed) : `adriano@ig.umons.ac.be` / `adriano@ig.umons.ac.be`
 Pipeline GitHub Actions (`.github/workflows/backend-ci.yml`) :
 1. **lint** — ESLint
 2. **test** — Jest
-3. **docker-push** — Build + push vers `ghcr.io/gaspardmenou/iot-rami-backend` (sur push vers `main` uniquement)
+3. **docker-push** — Build + push vers `ghcr.io/umons-ig/iot-rami-backend` (sur push vers `main` uniquement)
 
 Déploiement automatique via Watchtower sur la VM de production.

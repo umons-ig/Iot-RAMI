@@ -125,7 +125,7 @@ Key variables: `VITE_APP_BACK_URL` (e.g., `http://localhost:3000/api/v1`), `VITE
 
 ## CI/CD
 
-GitHub Actions, one workflow per module: `.github/workflows/backend-ci.yml` (lint → test → docker push), `.github/workflows/frontend-ci.yml`, `.github/workflows/fog-ci.yml`. All push to GHCR (`ghcr.io/gaspardmenou/iot-rami-{backend,frontend,fog}`). Images are public — Watchtower needs no GHCR credentials. Backend and fog CI build multi-platform `linux/amd64,linux/arm64`.
+GitHub Actions, one workflow per module: `.github/workflows/backend-ci.yml` (lint → test → docker push), `.github/workflows/frontend-ci.yml`, `.github/workflows/fog-ci.yml`. All push to GHCR (`ghcr.io/umons-ig/iot-rami-{backend,frontend,fog}`). Images are public — Watchtower needs no GHCR credentials. Backend and fog CI build multi-platform `linux/amd64,linux/arm64`.
 
 
 <frontend_aesthetics>

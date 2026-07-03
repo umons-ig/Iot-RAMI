@@ -52,7 +52,7 @@ export const MANAGEMENT_CONFIG = {
 export const FIRMWARE_CONFIG = {
   // Désactivé par défaut : l'auto-OTA en contexte médical doit être explicite.
   enabled: (process.env.FIRMWARE_OTA_ENABLED ?? "false") === "true",
-  repo: process.env.FIRMWARE_REPO ?? "GaspardMenou/Iot-RAMI",
+  repo: process.env.FIRMWARE_REPO ?? "umons-ig/Iot-RAMI",
   env: process.env.FIRMWARE_ENV ?? "universal",
   currentVersion: process.env.FIRMWARE_VERSION ?? "v0.0.0",
   pollIntervalMs: parseInt(process.env.FIRMWARE_POLL_INTERVAL_MS ?? "3600000"), // 1 h
@@ -61,7 +61,7 @@ export const FIRMWARE_CONFIG = {
   // OTA URL = <otaBaseUrl>/<tag>/rami-universal.bin
   otaBaseUrl:
     process.env.FIRMWARE_OTA_BASE_URL ??
-    "https://gaspardmenou.github.io/Iot-RAMI/flash/versions",
+    "https://umons-ig.github.io/Iot-RAMI/flash/versions",
 };
 
 // ─── Intégration Zigbee2MQTT ──────────────────────────────────────────────────

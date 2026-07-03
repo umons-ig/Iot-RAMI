@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e  # stop the script if any command fails
 
-REPO_RAW="https://raw.githubusercontent.com/GaspardMenou/Iot-RAMI/main/fog-service"
+REPO_RAW="https://raw.githubusercontent.com/umons-ig/Iot-RAMI/main/fog-service"
 
 # 1. Install Docker if not present
 if ! command -v docker &> /dev/null; then

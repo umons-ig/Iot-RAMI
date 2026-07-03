@@ -67,7 +67,7 @@
         - rami-network
 
     node-backend:
-      image: ghcr.io/gaspardmenou/iot-rami-backend:latest
+      image: ghcr.io/umons-ig/iot-rami-backend:latest
       container_name: iot-rami-backend
       restart: always
       ports:
@@ -112,7 +112,7 @@
         - rami-network
 
     frontend:
-      image: ghcr.io/gaspardmenou/iot-rami-frontend:latest
+      image: ghcr.io/umons-ig/iot-rami-frontend:latest
       container_name: iot-rami-frontend
       restart: always
       ports:
