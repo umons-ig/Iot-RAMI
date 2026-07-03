@@ -610,6 +610,15 @@ describe("MqttFog — exposition HA (publication / nettoyage / sécurité)", () 
     outboxAddHaAnnounced.mockClear();
     outboxClearHaAnnounced.mockClear();
   });
+  afterEach(() => {
+    // handleZigbeeMessage arme un timer de rotation de session qui se ré-arme à
+    // l'infini → sans ce nettoyage, l'event loop ne se vide jamais et Jest ne
+    // quitte pas (« Jest did not exit… », CI qui traîne). Cf. bloc « rotation ».
+    fog.sessionTimers.forEach((t: NodeJS.Timeout) => clearTimeout(t));
+    fog.sessionTimers.clear();
+    fog.sensorTimeouts.forEach((t: NodeJS.Timeout) => clearTimeout(t));
+    fog.sensorTimeouts.clear();
+  });
 
   it("publie une config retained par measureType (1×) pour un capteur exposé", () => {
     fog.haExposed.add("esp/sensor");
