@@ -95,6 +95,23 @@ sudo docker compose exec fog-service printenv | grep FIRMWARE
 
 Rollback d'une image en cas de mauvaise release : cf. [`BACKUP_AND_ROLLBACK.md`](BACKUP_AND_ROLLBACK.md).
 
+### 3.4 Variables devenues OBLIGATOIRES (audit du 07/08/2026)
+
+Depuis l'audit de sécurité, deux réglages ne peuvent plus rester vides sans conséquence
+visible. Le détail est dans [`AUDIT_SECURITE.md`](AUDIT_SECURITE.md) §5.
+
+| Hôte | Variable | Sans elle |
+|---|---|---|
+| Fog Pi | `MGMT_TOKEN` **ou** `MGMT_PASSWORD` | La console de gestion refuse **tout** (*fail-closed*) : plus d'OTA, de restart ni de reconfiguration à distance. Auparavant, leur absence ouvrait l'API à tout le monde — d'où le changement. |
+| VM cloud | `GF_SECURITY_ADMIN_PASSWORD` | Grafana refuse de démarrer (déjà en place avant l'audit). |
+
+Rappel du piège ci-dessus : après modification du `.env`, **recréer** le conteneur
+(`docker compose up -d --force-recreate`) — un simple `restart` ne recharge pas les
+variables d'environnement.
+
+Deux autres changements de comportement à connaître côté cloud : `/api/v1/docs` (Swagger)
+n'est plus servi en production, et `/teams` est réservé aux administrateurs.
+
 ---
 
 ## 4. Publier une nouvelle version du firmware ESP32

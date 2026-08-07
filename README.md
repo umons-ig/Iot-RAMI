@@ -188,6 +188,18 @@ Un audit complet a été mené le 2026-08-07 : **[`docs/AUDIT_SECURITE.md`](./do
 recense les failles corrigées, les arbitrages, les pièges à ne pas réintroduire et
 ce qui reste ouvert. À lire avant toute reprise du projet.
 
+> **Correctifs déployés** (`e866e25..1f6636d`). Deux actions restent à mener **sur
+> l'instance en service**, aucune n'étant réalisable par du code :
+>
+> 1. **purger le compte de démo** — le seeder ne le crée plus, mais ne supprime pas
+>    celui déjà en base, dont le mot de passe est public (voir plus haut) ;
+> 2. **restreindre le port Kafka au pare-feu** de la VM.
+>
+> Trois comportements ont changé : la console du fog exige désormais `MGMT_TOKEN`
+> ou `MGMT_PASSWORD` (sinon elle refuse tout), Swagger n'est plus servi en
+> production, et `/teams` est réservé aux admins. Détail et vérifications
+> post-déploiement : [`AUDIT_SECURITE.md`](./docs/AUDIT_SECURITE.md) §5.
+
 **Trois chantiers restent ouverts** — aucun n'est un oubli, chacun demande une
 opération d'infrastructure :
 

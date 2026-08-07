@@ -131,12 +131,33 @@ entière.
 | **`join-session` non limité en débit** | Chaque message déclenche des requêtes d'autorisation ; un compte authentifié peut marteler l'évènement (les limiteurs Express ne couvrent pas le canal WebSocket). Amplification modérée, authentifiée. | Limiteur par socket, ou mémoïsation très courte du couple (userId, sensorId). |
 | **Vulnérabilités npm restantes** | Backend 11, frontend 8 — **hors du chemin d'exécution en production** (vitest, vite, vue-tsc, nodemon, pm2, tsup, eslint). `tar` (critical) vient de `bcrypt` → `node-pre-gyp`, mais ne sert qu'à décompresser le binaire natif **à l'installation** : c'est un risque de chaîne de build, pas une surface exploitable à distance. | Revoir à chaque montée de version majeure. Ne **pas** suivre la suggestion `npm audit` pour `sequelize` : elle propose un retour en 3.x, et l'avis d'injection SQL a été vérifié **non atteignable** (aucune colonne JSON ni cast dans le code). |
 
-## 5. À faire hors dépôt
+## 5. Déploiement et actions d'exploitation
 
-**Purger le compte de démo en production.** Le correctif du seeder empêche sa création
-future, mais **ne supprime pas un compte déjà présent** : si la base a été initialisée avec
-`init-db`, l'administrateur `adriano@ig.umons.ac.be` existe avec un mot de passe public
-(son hash bcrypt est committé). À vérifier et traiter sur l'instance en service :
+Les correctifs ont été poussés sur `main` le 2026-08-07 (`e866e25..1f6636d`, 9 commits
+thématiques), CI verte sur les cinq workflows. **Watchtower déploie automatiquement**
+sur la VM cloud et sur le Pi fog : ces changements sont donc en service.
+
+### 5.1 Changements de comportement à connaître
+
+Trois correctifs modifient un comportement observable. Aucun n'est un bug, mais chacun
+peut surprendre en exploitation.
+
+| Changement | Effet visible | Quoi faire |
+|---|---|---|
+| **Console fog en fail-closed** | Sans `MGMT_TOKEN` ni `MGMT_PASSWORD` dans le `.env` du Pi, `/api/*` refuse **tout** : plus d'OTA, de restart ni de reconfiguration à distance. | Définir l'un des deux **avant** que l'image fog ne soit tirée, puis recréer le conteneur (`docker compose up -d --force-recreate`) — un simple restart ne recharge pas les variables. |
+| **Swagger coupé en production** | `/api/v1/docs` répond 404. | Normal. Pour une instance de démonstration : `SWAGGER_ENABLED=true`. |
+| **`/teams` et `/teams/:id` réservés aux admins** | Un compte non-admin reçoit 401. | Normal — ces routes livraient l'annuaire complet (nom + email de tous les utilisateurs). La vue Teams du frontend était déjà admin-only. |
+
+### 5.2 Actions restantes, hors dépôt
+
+Ces deux points ne peuvent pas être corrigés par du code : ils demandent une intervention
+sur l'instance en service.
+
+**1. Purger le compte de démo.** Le correctif du seeder empêche sa création future, mais
+**ne supprime pas un compte déjà présent** : si la base a été initialisée avec `init-db`,
+l'administrateur `adriano@ig.umons.ac.be` existe avec un mot de passe public (son hash
+bcrypt est committé dans un dépôt public). C'est aujourd'hui l'accès le plus direct qui
+reste ouvert.
 
 ```sql
 SELECT id, email, role FROM "Users" WHERE email = 'adriano@ig.umons.ac.be';
@@ -145,8 +166,38 @@ DELETE FROM "Users" WHERE email = 'adriano@ig.umons.ac.be';
 -- ou bien lui affecter un hash bcrypt neuf généré hors ligne.
 ```
 
-**Restreindre le port Kafka au pare-feu** (cf. §4) — quelques minutes, et cela ferme
-l'accès le plus direct aux données médicales.
+**2. Restreindre le port Kafka au pare-feu.** Quelques minutes, aucun changement de
+fichier, et cela ferme l'exposition la plus large qui subsiste (lecture de tout le flux
+médical et injection de fausses mesures) :
+
+```bash
+ufw allow from <IP_DU_FOG> to any port 9092
+ufw deny 9092
+```
+
+### 5.3 Vérification après déploiement
+
+À faire une fois que Watchtower a tiré les images (poll de 300 s) :
+
+```bash
+# 1. Le backend redémarre bien (il ne démarrait plus sur Node >= 22 avant correctif)
+curl -s https://<host>:3000/health          # attendu : {"status":"ok"}
+
+# 2. Swagger n'est plus servi
+curl -s -o /dev/null -w '%{http_code}\n' https://<host>:3000/api/v1/docs   # attendu : 404
+
+# 3. La console fog répond (sinon : MGMT_TOKEN/MGMT_PASSWORD manquants, cf. 5.1)
+curl -s -o /dev/null -w '%{http_code}\n' -H "X-Mgmt-Token: <token>" \
+     http://localhost:9200/api/devices      # attendu : 200 — et 401 sans le jeton
+
+# 4. Les capteurs remontent toujours des mesures (contre-épreuve : aucun correctif
+#    ne doit avoir coupé la collecte)
+docker logs iot-rami-backend --tail 50 | grep -i sensordata
+```
+
+Si le point 4 est muet alors que les ESP publient, vérifier en priorité que la table
+`MeasurementTypes` n'est pas vide : sans ces types, le consommateur Kafka ignore
+silencieusement chaque mesure (cf. le piège du seeder en §3).
 
 ## 6. Note de compatibilité (corrigé, mais à connaître)
 
