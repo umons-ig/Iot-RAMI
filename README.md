@@ -155,6 +155,18 @@ La CI pousse les images sur **GHCR** (publiques). Sur chaque hôte, **Watchtower
 |-------|-------------|------|
 | `adriano@ig.umons.ac.be` | `adriano@ig.umons.ac.be` | Admin |
 
+> ⚠️ **Développement uniquement.** Le hash bcrypt de ce compte est committé : son
+> mot de passe est donc public. Depuis l'audit, le seeder **se saute en
+> production** (avec un avertissement) sauf `ALLOW_DEMO_SEED=true`.
+>
+> Si ta base de production a été initialisée avec `init-db` **avant** ce
+> correctif, le compte existe toujours : vérifie-le et supprime-le.
+>
+> ```sql
+> SELECT id, email, role FROM "Users" WHERE email = 'adriano@ig.umons.ac.be';
+> DELETE FROM "Users" WHERE email = 'adriano@ig.umons.ac.be';
+> ```
+
 ---
 
 ## Documentation
@@ -172,16 +184,21 @@ La CI pousse les images sur **GHCR** (publiques). Sur chaque hôte, **Watchtower
 
 ## Sécurité & déploiement (état actuel)
 
-> **HTTPS / Reverse proxy : non encore en place.** Tant que le projet n'est pas en
-> production, les services sont exposés en **HTTP clair** (backend `:3000`, frontend `:8080`,
-> Grafana `:3001`). Avant toute mise en production, prévoir un **reverse proxy TLS**
-> (Traefik ou Caddy) en frontal pour terminer le HTTPS (Let's Encrypt), n'exposer qu'un seul
-> port 443, et fermer les ports applicatifs et Kafka de l'accès direct.
->
-> De même, le transport **fog → Kafka** est aujourd'hui en `PLAINTEXT` sans authentification.
-> Voir [`docs/ETAT_DES_LIEUX.md`](./docs/ETAT_DES_LIEUX.md) pour les pistes de sécurisation
-> (WireGuard, SASL_SSL) et les autres chantiers (rétention locale des données médicales,
-> standardisation MQTT, intégration Home Assistant).
+Un audit complet a été mené le 2026-08-07 : **[`docs/AUDIT_SECURITE.md`](./docs/AUDIT_SECURITE.md)**
+recense les failles corrigées, les arbitrages, les pièges à ne pas réintroduire et
+ce qui reste ouvert. À lire avant toute reprise du projet.
+
+**Trois chantiers restent ouverts** — aucun n'est un oubli, chacun demande une
+opération d'infrastructure :
+
+| Chantier | Pourquoi c'est ouvert | Prochain pas |
+|---|---|---|
+| **HTTPS absent** | Les services sont en HTTP clair (backend `:3000`, frontend `:8080`, Grafana `:3001`) : les JWT circulent en clair. Le blocage est le **nom de domaine**, sans lequel Let's Encrypt ne peut pas émettre. | Traefik ou Caddy en frontal, puis reprendre `VITE_APP_BACK_URL`, `VITE_SOCKET_URL` et `FRONTEND_URL`. |
+| **Kafka en PLAINTEXT** (`:9092`) | Le port doit rester joignable par le fog **distant** ; le fermer coupe la collecte. Qui l'atteint lit tout le flux médical et peut injecter de fausses mesures. | **Tout de suite** : `ufw allow from <IP_FOG> to any port 9092 && ufw deny 9092`. Ensuite SASL_SSL — le code lit déjà `KAFKA_SSL` / `KAFKA_SASL_*` des deux côtés, et le compose a le bloc prêt en commentaire. |
+| **MQTT sans TLS ni ACL** | Le TLS est **prêt** (firmware `universal_tls`, `mqtts://` côté fog) mais désactivé : la bascule doit être simultanée broker + fog + capteurs. Les ESP partagent une identité, donc l'un peut commander les autres. | Cf. [`docs/FIRMWARE_DEPLOYMENT.md`](./docs/FIRMWARE_DEPLOYMENT.md) §8. À faire **avant** de flasher le parc. |
+
+Autres chantiers (rétention locale des données médicales, standardisation MQTT,
+Home Assistant) : [`docs/ETAT_DES_LIEUX.md`](./docs/ETAT_DES_LIEUX.md).
 
 ## CI/CD
 

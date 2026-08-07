@@ -92,10 +92,13 @@ servent alors la nouvelle version **automatiquement**.
 | Variable | Rôle | Défaut |
 |----------|------|--------|
 | `MQTT_USERNAME` / `MQTT_PASSWORD` | broker (doit matcher les ESP) | — |
+| `MQTT_URL` | `mqtt://…` ou `mqtts://…` pour le TLS | `mqtt://localhost` |
 | `KAFKA_BROKERS` | Kafka cloud | — |
-| `MGMT_PASSWORD` | mot de passe admin (login console) | *(vide)* |
-| `MGMT_TOKEN` | secret statique (scripts/API) | *(vide)* |
+| `MGMT_PASSWORD` | mot de passe admin (login console) | *(vide → API fermée)* |
+| `MGMT_TOKEN` | secret statique (scripts/API) | *(vide → API fermée)* |
 | `MGMT_BIND` | interface d'écoute `:9200` | `127.0.0.1` |
+| `METRICS_BIND` | adresse de publication des métriques `:9100` | `127.0.0.1` |
+| `ALLOW_INSECURE_OTA` | autorise une URL OTA en `http://` (banc de test) | `false` |
 | `FIRMWARE_OTA_ENABLED` | auto-OTA par appareil | `false` |
 | `FIRMWARE_REPO` / `FIRMWARE_ENV` | dépôt / env du binaire | `umons-ig/Iot-RAMI` / `universal` |
 | `FIRMWARE_POLL_INTERVAL_MS` | fréquence de check des releases | `3600000` |
@@ -105,17 +108,79 @@ servent alors la nouvelle version **automatiquement**.
 
 > **Mosquitto** : le broker **génère son fichier de mots de passe** depuis
 > `MQTT_USERNAME`/`MQTT_PASSWORD` au démarrage (compose). Définis-les dans le
-> `.env` avec **les mêmes valeurs que les ESP** (par défaut `fog1`/`fog1password`),
-> sinon le broker refuse l'auth (`rc=5 / not authorised`).
+> `.env` avec **les mêmes valeurs que celles saisies au portail des ESP**, sinon
+> le broker refuse l'auth (`rc=5 / not authorised`).
+>
+> ⚠️ Les anciens identifiants par défaut (`fog1`/`fog1password`) ont été
+> **retirés du firmware** : ils étaient committés dans un dépôt public, donc
+> connus de tous. Les champs du portail sont désormais vides et doivent être
+> saisis. Conséquence pratique : le portail enregistre **ce que contiennent les
+> champs au moment de la sauvegarde** — si tu le rouvres pour changer seulement
+> le WiFi sans re-remplir les champs MQTT, tu écrases la configuration avec du
+> vide et l'ESP ne se reconnecte plus. Remplis les quatre champs à chaque passage.
 
 > ⚠️ Après modification du `.env`, **recrée** le conteneur (`docker compose up -d`
 > recrée si l'image/conf change ; sinon `--force-recreate`) — un simple restart ne
 > recharge pas les variables.
 
-## 8. Sécurité (état)
+## 8. MQTT en TLS (optionnel, prêt à activer)
 
-- Console de gestion : auth (token/mot de passe) + bind localhost par défaut.
-- OTA : **HTTPS** vers GitHub Pages (`setInsecure` pour l'instant — durcissement
-  prévu : bundle CA + binaire **signé**).
+Par défaut le MQTT est **en clair** : mesures et identifiants circulent en clair
+sur le LAN. Le firmware sait faire du TLS, il suffit de le compiler pour.
+
+**Sur l'ESP** — flasher l'environnement `universal_tls` au lieu de `universal` :
+
+```bash
+pio run -e universal_tls
+```
+
+Il ajoute `-D RAMI_MQTT_TLS`, ce qui bascule `PubSubClient` sur
+`WiFiClientSecure` et fait passer le port par défaut à **8883**. Avant de
+flasher, coller le certificat de ton AC dans
+`Arduino/ESP32/Common/src/MqttCaCert.hpp`. Tant qu'il est vide, le firmware
+**refuse de se connecter** et l'explique sur la console série : chiffrer sans
+vérifier l'identité du broker protégerait de l'écoute passive, mais pas de
+l'usurpation — or c'est justement l'attaque qui permet de piloter un capteur.
+
+Pour un essai rapide sans AC, ajouter `-D RAMI_MQTT_TLS_INSECURE` : le trafic
+est chiffré, le certificat **n'est pas vérifié**, et un avertissement s'affiche à
+chaque démarrage. À ne jamais laisser en service.
+
+Coût mesuré : +0,8 % de RAM et +2,3 % de flash par rapport au binaire en clair.
+
+**Sur le fog** — `MQTT_URL=mqtts://<hote>` et `MQTT_PORT=8883` ; `mqtt.js` gère
+le schéma tout seul, aucun code à changer.
+
+**Sur le broker** — ajouter un listener 8883 avec les certificats dans
+`fog-service/mosquitto/config/mosquitto.conf`.
+
+> ⚠️ La bascule doit être **simultanée** : le jour où le broker n'écoute plus
+> qu'en 8883, un fog resté en `mqtt://` ne collecte plus rien.
+
+Reste à faire pour aller au bout : **un compte Mosquitto par capteur** plus un
+`acl_file`. Aujourd'hui tous les ESP partagent une identité, donc un capteur
+compromis peut publier sur le topic `/server` d'un autre et lui envoyer une
+commande `ota` ou `restart`. C'est le bon moment pour fixer la convention de
+nommage — après le déploiement du parc, cela coûte un repassage sur chaque
+appareil.
+
+## 9. Sécurité (état)
+
+- **Console de gestion** : *fail-closed*. Sans `MGMT_TOKEN` ni `MGMT_PASSWORD`,
+  l'API `/api/*` refuse tout et le service le signale au démarrage. Le jeton de
+  session est un HMAC sur clé dérivée par `scrypt`, avec expiration signée
+  (12 h) ; le login est limité à 10 tentatives par quart d'heure.
+- **OTA** : **HTTPS obligatoire** des deux côtés (le fog refuse de construire la
+  commande, le firmware refuse de la traiter). Le certificat n'est en revanche
+  **pas encore validé** (`setInsecure`). L'épinglage d'une racine a été écarté :
+  la chaîne diffère selon l'hôte GitHub et tourne dans le temps, un CA figé
+  casserait l'OTA de façon différée. La bonne réponse est l'intégrité — publier
+  le SHA-256 du binaire dans la release, le transmettre via le fog (qui valide
+  TLS correctement) et le vérifier sur l'ESP avant reboot.
+- **Identifiants MQTT** : plus aucune valeur par défaut dans le firmware.
+- **MQTT** : TLS disponible (cf. §8), désactivé par défaut ; pas encore d'ACL
+  par topic.
 - Watchdog matériel désactivé le temps du flash OTA (évite un reset en plein
   téléchargement).
+
+Détail complet et arbitrages : [AUDIT_SECURITE.md](AUDIT_SECURITE.md).

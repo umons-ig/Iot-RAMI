@@ -154,14 +154,46 @@ Notes :
 - Si un jour un vrai secret est commité par erreur : **le tourner** (changer la valeur
   réelle) est la seule vraie remédiation — le repo est public, l'historique est
   définitivement exposé.
-- Auth backend : JWT access (15 min) + refresh token (7 j, cookie HttpOnly). Rate
-  limiting global + sur `/auth`.
+- Auth backend : JWT access (15 min) + refresh token (7 j, cookie HttpOnly).
+  Limitation de débit globale, plus un limiteur **par surface d'authentification**
+  (`/auth`, `/users/login`, `/users/signup` ont chacun leur compteur — un seul
+  limiteur partagé permettrait d'en saturer un pour bloquer les autres).
+  Changer son mot de passe **révoque** les sessions ouvertes ailleurs.
+- **Un audit de sécurité complet a été mené le 07/08/2026** :
+  [`AUDIT_SECURITE.md`](AUDIT_SECURITE.md). À lire avant de toucher au contrôle
+  d'accès — il documente les failles corrigées (dont une critique : le canal
+  WebSocket contournait entièrement l'autorisation), la façon dont elles ont été
+  vérifiées, et surtout les **pièges à ne pas réintroduire**.
+- **Compte de démo** : le seeder crée un admin dont le mot de passe est public
+  (hash committé). Il se saute désormais en production, mais **ne supprime pas un
+  compte déjà créé** : à vérifier sur l'instance en service (requête SQL dans le
+  [README](../README.md#comptes-de-test-seed)).
 
 ---
 
 ## 7. Gaps ouverts (à reprendre)
 
-- **HTTPS** : pas encore de reverse-proxy TLS (attend un nom de domaine — Nginx/Traefik).
+### Sécurité — trois chantiers d'infrastructure
+
+Aucun n'est un oubli : chacun demande une opération coordonnée, pas un correctif
+de code. Détail et arbitrages dans [`AUDIT_SECURITE.md`](AUDIT_SECURITE.md) §4.
+
+- **HTTPS** : pas encore de reverse-proxy TLS (attend un nom de domaine — Traefik
+  ou Caddy). Les JWT circulent en clair d'ici là.
+- **Kafka `:9092` en PLAINTEXT** : le port doit rester joignable par le fog
+  distant, donc on ne peut pas le fermer sans couper la collecte. **Action
+  immédiate à coût nul** : `ufw allow from <IP_FOG> to any port 9092 && ufw deny
+  9092` sur la VM. Le chiffrement ensuite : le code lit déjà `KAFKA_SSL` et
+  `KAFKA_SASL_*` des deux côtés, et le compose a le bloc SASL_SSL prêt en
+  commentaire — c'est de la configuration, pas du développement.
+- **MQTT sans TLS ni ACL** : le TLS est **implémenté et compilé** (environnement
+  `universal_tls`), mais désactivé — la bascule doit être simultanée broker + fog
+  + capteurs. L'ACL par topic suppose un compte Mosquitto par appareil : **à
+  décider avant de flasher le parc**, après cela coûte un repassage sur chacun.
+  Cf. [`FIRMWARE_DEPLOYMENT.md`](FIRMWARE_DEPLOYMENT.md) §8.
+
+### Autres
+
 - **Tests E2E / charge** : non implémentés (Cypress/Playwright, k6/Artillery). Base de
   test de charge existante : [`LOAD_TEST.md`](LOAD_TEST.md).
 - **Seuils (thresholds)** : pas de tests unitaires contrôleur/routes, et routes non

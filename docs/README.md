@@ -6,6 +6,9 @@
 | Document       | Description                                                    |
 |----------------|----------------------------------------------------------------|
 | [PASSATION.md](./PASSATION.md) | **Reprise du projet** : accès, déploiement, release firmware, gaps |
+| [AUDIT_SECURITE.md](./AUDIT_SECURITE.md) | **Audit de sécurité (07/08/2026)** : failles corrigées et vérifiées, arbitrages, pièges à ne pas réintroduire, ce qui reste ouvert |
+| [FIRMWARE_DEPLOYMENT.md](./FIRMWARE_DEPLOYMENT.md) | Flash USB, portail de configuration, OTA, console de gestion du fog, MQTT en TLS |
+| [FIRMWARE_ARCHITECTURE.md](./FIRMWARE_ARCHITECTURE.md) | Architecture du firmware unifié : `ISensor`, drivers, SensorRunner |
 | [MQTT.md](./MQTT.md)   | Topics MQTT, protocole capteur/fog, format des messages |
 | [KAFKA.md](./KAFKA.md) | Topic Kafka `sensor-data`, schemas des 3 types de messages (`start`, `data`, `stop`) |
 | [API.md](./API.md)     | Reference complete de l'API REST + WebSocket Socket.io  |

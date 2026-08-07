@@ -11,6 +11,32 @@
 
 Le fog-service se connecte au broker Mosquitto local. Les capteurs ESP32 ou le simulateur Python se connectent au meme broker.
 
+### Transport et authentification
+
+Le broker exige une authentification (`allow_anonymous false` + `password_file`),
+mais le transport est **en clair par défaut** : mesures et identifiants circulent
+en clair sur le LAN.
+
+Le TLS est **disponible et prêt à activer**, il faut basculer les trois côtés
+ensemble :
+
+| Côté | Bascule |
+|---|---|
+| Fog | `MQTT_URL=mqtts://<hote>` + `MQTT_PORT=8883` — `mqtt.js` gère le schéma seul, aucun code à changer |
+| ESP32 | flasher l'environnement `universal_tls` (`-D RAMI_MQTT_TLS`), après avoir renseigné `Arduino/ESP32/Common/src/MqttCaCert.hpp` |
+| Broker | listener `8883` avec les certificats dans `fog-service/mosquitto/config/mosquitto.conf` |
+
+> ⚠️ Le jour où le broker n'écoute plus qu'en 8883, un fog resté en `mqtt://` ne
+> collecte plus rien. La bascule est une opération coordonnée, pas un réglage.
+
+**Limite connue : pas d'ACL par topic.** Tous les capteurs partagent une seule
+identité MQTT. Un capteur compromis peut donc publier sur le topic `/server`
+d'un autre et lui envoyer une commande `ota`, `set_mqtt` ou `restart` — c'est-à-dire
+prendre le contrôle du parc. Y remédier suppose **un compte Mosquitto par
+capteur** plus un `acl_file` : à décider avant de déployer les appareils, car
+après cela demande de repasser sur chacun. Détail :
+[AUDIT_SECURITE.md](AUDIT_SECURITE.md).
+
 ---
 
 ## Structure des topics
