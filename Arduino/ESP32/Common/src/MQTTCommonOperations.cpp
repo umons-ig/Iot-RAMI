@@ -55,9 +55,13 @@ const long GMT_OFFSET_SEC = 0;
 const int DAYLIGHT_OFFSET_SEC = 0;
 
 WiFiManager wm;
-WiFiManagerParameter broker("broker", "MQTT Broker IP", "192.168.10.4", 40);
-WiFiManagerParameter username("mqtt_user", "MQTT User", "fog1", 40);
-WiFiManagerParameter password("mqtt_password", "MQTT Password", "fog1password", 40);
+// Aucun identifiant par défaut : « fog1 » / « fog1password » étaient committés
+// dans un dépôt public, donc connus de tous, et tout capteur laissé en
+// configuration d'usine acceptait ces identifiants. Les champs sont désormais
+// vides — ils doivent être saisis au portail de configuration.
+WiFiManagerParameter broker("broker", "MQTT Broker IP", "", 40);
+WiFiManagerParameter username("mqtt_user", "MQTT User", "", 40);
+WiFiManagerParameter password("mqtt_password", "MQTT Password", "", 40);
 WiFiManagerParameter sensor_name("sensor_name", "MQTT Sensor Name", "esp32-bmp280", 40);
 // Sélection des capteurs au runtime (variante A) : liste CSV éditée au portail.
 WiFiManagerParameter sensors_param("sensors", "Capteurs (csv: dht22,bh1750,sgp30)", "", 120);
@@ -133,7 +137,24 @@ void setup_wifi() {
         }
         Serial.println("Connecté");
         Serial.println(WiFi.localIP());
-        wm.startWebPortal(); // page de config accessible à http://<esp32-ip>/
+        // PAS de startWebPortal() ici — volontaire.
+        //
+        // Il laissait tourner en permanence, sur l'IP LAN du capteur, un serveur
+        // HTTP WiFiManager SANS AUCUNE AUTHENTIFICATION : l'auth de la librairie
+        // est morte (`bool testauth = false; if(!testauth) return;` dans
+        // WiFiManager.cpp), et setupHTTPServer() enregistre entre autres
+        // `/wifisave` (repointer le broker MQTT), `/erase` (effacer la config) et
+        // surtout `/u` en POST, qui écrit directement via Update — soit un flash
+        // de firmware arbitraire en une requête, depuis n'importe quel poste du
+        // réseau, sans identifiant. Tout le durcissement de la console du fog
+        // (mot de passe, jeton expirant, anti-bruteforce) était contournable par
+        // ce chemin.
+        //
+        // La reconfiguration reste possible par deux voies authentifiées :
+        //   - la console série USB (SensorRunner::processSerialLine) ;
+        //   - les commandes MQTT `set_wifi` / `set_mqtt` poussées par le fog.
+        // Le portail de PREMIER démarrage (branche `else`) est conservé : il ne
+        // s'ouvre que faute de WiFi configuré, sur un AP éphémère.
     } else {
         Serial.println("[WiFi] non connecté — portail de config (non bloquant)");
         wm.startConfigPortal("RAMI-Setup"); // non bloquant -> rend la main
@@ -193,6 +214,18 @@ void setCACertForTLS(WiFiClientSecure& client, const char* certificate) {
 
 void performOta(const String& url) {
     if (url.length() == 0) return;
+
+    // HTTPS EXIGÉ. En clair, quiconque se place sur le chemin réseau (WiFi de
+    // l'établissement, ARP spoofing) remplace la réponse et fait exécuter un
+    // firmware arbitraire sur un dispositif médical. Compiler avec
+    // -DRAMI_ALLOW_INSECURE_OTA pour autoriser http:// sur un banc de test.
+#ifndef RAMI_ALLOW_INSECURE_OTA
+    if (!url.startsWith("https://")) {
+        Serial.println("[OTA] REFUS : URL non HTTPS");
+        return;
+    }
+#endif
+
     Serial.print("[OTA] mise a jour depuis ");
     Serial.println(url);
     // httpUpdate.update() est BLOQUANT (download ~1 Mo) et peut dépasser le délai
@@ -202,9 +235,20 @@ void performOta(const String& url) {
     httpUpdate.rebootOnUpdate(true); // reboot automatique après flash réussi
     t_httpUpdate_return ret;
     if (url.startsWith("https")) {
-        // HTTPS (ex. binaires GitHub Pages). setInsecure : pas de validation de
-        // certificat pour l'instant (durcissement : bundle CA + signature § audit).
         WiFiClientSecure secure;
+        // LIMITE CONNUE : le certificat n'est pas validé.
+        //
+        // Épingler une racine a été écarté après vérification : la chaîne diffère
+        // selon l'hôte (ISRG Root pour *.githubusercontent.com, Sectigo pour
+        // github.com) et GitHub la fait tourner — un CA figé ici casserait l'OTA
+        // de façon différée et difficile à diagnostiquer.
+        //
+        // La bonne réponse est l'intégrité, pas l'authenticité du transport :
+        // publier le SHA-256 du binaire dans la release, le faire transiter par
+        // le fog (qui, lui, valide TLS correctement via Node) dans la commande
+        // `ota`, et vérifier le condensat sur l'ESP avant de rebooter dessus —
+        // via Update.begin/write plutôt que httpUpdate.update(), qui flashe et
+        // redémarre sans laisser la main. Cf. docs/AUDIT_SECURITE.md §4.
         secure.setInsecure();
         ret = httpUpdate.update(secure, url);
     } else {

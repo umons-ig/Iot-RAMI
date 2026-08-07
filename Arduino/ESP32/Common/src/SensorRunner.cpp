@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include "SensorRunner.hpp"
 #include "MQTTCommonOperations.hpp"
+#include "MqttTransport.hpp"
 #include "PinConfig.hpp"
 #include "Version.hpp"
 
@@ -26,6 +27,9 @@ SensorRunner::SensorRunner(PubSubClient& client, ISensor& sensor,
 
 void SensorRunner::setup() {
   Serial.begin(115200);
+  // Après Serial.begin : les diagnostics TLS doivent être lisibles. Sans effet
+  // en transport clair (mode par défaut).
+  setupMqttTransport();
   setup_wifi();  // + watchdog/reconnexion WiFi (cf. Common)
   configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
   loadPinConfig();  // pins NVS chargées AVANT begin() (les drivers les lisent)
