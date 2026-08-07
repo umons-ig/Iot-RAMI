@@ -613,14 +613,11 @@ class SocketService {
    */
   public startAccessRevalidation(): void {
     if (this.accessRevalidationInterval) return;
-    this.accessRevalidationInterval = setInterval(
-      () => {
-        this.revalidateSocketAccess().catch((error) =>
-          console.error("[access-revalidation] échec:", error)
-        );
-      },
-      this.ACCESS_REVALIDATION_MS
-    );
+    this.accessRevalidationInterval = setInterval(() => {
+      this.revalidateSocketAccess().catch((error) =>
+        console.error("[access-revalidation] échec:", error)
+      );
+    }, this.ACCESS_REVALIDATION_MS);
   }
 
   public stopAccessRevalidation(): void {

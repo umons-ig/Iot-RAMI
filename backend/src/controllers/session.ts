@@ -464,7 +464,10 @@ const exportSessionAsCsv = async (req: Request, res: Response) => {
       // remonterait en exception non capturée, ce qui tue le process (donc
       // toutes les sessions ECG en cours). On coupe la réponse : le client verra
       // un téléchargement tronqué, ce qui est le seul signal possible à ce stade.
-      console.error("[exportSessionAsCsv] échec en cours de flux:", streamError);
+      console.error(
+        "[exportSessionAsCsv] échec en cours de flux:",
+        streamError
+      );
       res.destroy();
       return;
     } finally {

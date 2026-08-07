@@ -27,7 +27,11 @@ const assertSensorAccess = async (
 ): Promise<void> => {
   const user = req.user as UserPayload | undefined;
   if (user?.role === Role.ADMIN) return;
-  if (!user?.userId || !idSensor || !(await userHasSensorAccess(user.userId, idSensor))) {
+  if (
+    !user?.userId ||
+    !idSensor ||
+    !(await userHasSensorAccess(user.userId, idSensor))
+  ) {
     throw new ForbiddenException(
       "You do not have access to this sensor",
       "threshold.sensor.forbidden"
@@ -35,15 +39,25 @@ const assertSensorAccess = async (
   }
 };
 
-const handleThresholdError = (error: unknown, res: Response, context: string) => {
+const handleThresholdError = (
+  error: unknown,
+  res: Response,
+  context: string
+) => {
   if (error instanceof BadRequestException) {
-    return res.status(400).json({ error: error.message, code: error.codeError });
+    return res
+      .status(400)
+      .json({ error: error.message, code: error.codeError });
   }
   if (error instanceof ForbiddenException) {
-    return res.status(403).json({ error: error.message, code: error.codeError });
+    return res
+      .status(403)
+      .json({ error: error.message, code: error.codeError });
   }
   if (error instanceof NotFoundException) {
-    return res.status(404).json({ error: error.message, code: error.codeError });
+    return res
+      .status(404)
+      .json({ error: error.message, code: error.codeError });
   }
   console.error(context, error);
   return res.status(500).json({

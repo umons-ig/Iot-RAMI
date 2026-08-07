@@ -143,9 +143,7 @@ const useSession = () => {
 	const lastMessageTime = ref<Date | null>(null)
 	// État de connexion temps réel exposé à l'UI (badge LIVE / RECONNEXION…).
 	// Cf. PLAN_AMELIORATIONS §1.6.
-	const connectionState = ref<"connected" | "reconnecting" | "disconnected" | "forbidden">(
-		"disconnected",
-	)
+	const connectionState = ref<"connected" | "reconnecting" | "disconnected" | "forbidden">("disconnected")
 	// Gel de l'affichage temps réel : quand `paused`, on cesse d'alimenter le
 	// graphe (le socket continue de tourner) pour inspecter la fenêtre courante.
 	const paused = ref(false)

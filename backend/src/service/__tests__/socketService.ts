@@ -743,7 +743,9 @@ describe("SocketService", () => {
         role: "regular",
       });
       (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
-      (userHasSensorAccess as jest.Mock).mockRejectedValue(new Error("db down"));
+      (userHasSensorAccess as jest.Mock).mockRejectedValue(
+        new Error("db down")
+      );
 
       await service.revalidateSocketAccess();
 
