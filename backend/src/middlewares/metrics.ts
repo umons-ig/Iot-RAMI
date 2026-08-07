@@ -39,8 +39,60 @@ export const kafkaMessageProcessingSeconds = new Histogram({
   registers: [metricsRegistry],
 });
 
+/**
+ * Réduit un chemin à sa forme paramétrée pour servir de label Prometheus.
+ *
+ * Les UUID DOIVENT être normalisés : le projet identifie capteurs, sessions et
+ * utilisateurs par UUID, or l'ancienne version ne remplaçait que les segments
+ * numériques. Chaque URL produisait donc une série temporelle distincte —
+ * cardinalité non bornée, mémoire de Prometheus et du backend qui monte
+ * indéfiniment, et n'importe qui pouvait l'accélérer en tapant des URL au hasard.
+ */
+const UUID_SEGMENT =
+  /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * Familles de routes réellement montées (cf. `routes/routes.ts`). Tout ce qui
+ * n'en fait pas partie est replié sur une étiquette unique.
+ *
+ * Normaliser les UUID ne suffisait pas : `metricsMiddleware` est monté AVANT le
+ * routeur, donc `res.on("finish")` se déclenche aussi sur les 404 de
+ * `app.all("*")`. Un chemin arbitraire sans UUID ni chiffre traversait
+ * `normalizeRoute` intact et créait un jeu de labels de plus — et `prom-client`
+ * ne purge jamais. Boucler sur `GET /<aléatoire>` faisait donc croître la
+ * mémoire du backend sans authentification ; le limiteur global cadence cette
+ * croissance, il ne la borne pas.
+ */
+const KNOWN_ROUTE_PREFIXES = new Set([
+  "sensors",
+  "zones",
+  "teams",
+  "sessions",
+  "measurementTypes",
+  "measurements",
+  "users",
+  "auth",
+  "thresholds",
+]);
+
+const MAX_LABEL_LENGTH = 120;
+
 const normalizeRoute = (path: string): string => {
-  return path.replace(/\/\d+/g, "/:id");
+  const normalized = path
+    .replace(UUID_SEGMENT, "/:id")
+    .replace(/\/\d+/g, "/:id");
+
+  if (normalized === "/health" || normalized === "/metrics") return normalized;
+
+  const apiMatch = normalized.match(/^\/api\/v1\/([^/]+)/);
+  if (!apiMatch) return "/other";
+  if (!KNOWN_ROUTE_PREFIXES.has(apiMatch[1])) return "/api/v1/other";
+
+  // Filet de sécurité : même sous un préfixe connu, un chemin anormalement long
+  // ne doit pas devenir un label.
+  return normalized.length > MAX_LABEL_LENGTH
+    ? `/api/v1/${apiMatch[1]}/other`
+    : normalized;
 };
 
 export const metricsMiddleware = (
