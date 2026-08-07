@@ -37,6 +37,7 @@ jest.mock("@middlewares/auth", () => ({
   },
   authAdmin: (_req: any, _res: any, next: () => void) => next(),
   requireSessionAccess: (_req: any, _res: any, next: () => void) => next(),
+  requireSensorAccess: () => (_req: any, _res: any, next: () => void) => next(),
 }));
 
 // On cast DB en any pour pouvoir utiliser .mockResolvedValue sur ses propriétés
@@ -122,6 +123,13 @@ describe("Session Controller", () => {
         idSession: "bc9d5577-c636-402c-a682-dc533f31dfce",
       };
 
+      // La clôture vérifie d'abord que la session existe et que l'appelant a
+      // accès à son capteur (le mock `auth` injecte un admin).
+      mockDB.Session.findByPk.mockResolvedValue({
+        id: body.idSession,
+        idSensor: sensors[0].id,
+        dataValues: { id: body.idSession, idSensor: sensors[0].id },
+      });
       mockDB.Session.update.mockResolvedValue([1]);
 
       const res = await request.post(`${baseUri}/new/on/server`).send(body);
@@ -129,6 +137,29 @@ describe("Session Controller", () => {
       expect(mockDB.Session.update).toHaveBeenCalled();
       expect(res.status).toBe(201);
       expect(res.body.message).toBe("session ended");
+    });
+
+    test("should return 404 when the session does not exist", async () => {
+      mockDB.Session.findByPk.mockResolvedValue(null);
+      mockDB.Session.update.mockClear();
+
+      const res = await request
+        .post(`${baseUri}/new/on/server`)
+        .send({ idSession: "bc9d5577-c636-402c-a682-dc533f31dfce" });
+
+      expect(res.status).toBe(404);
+      expect(mockDB.Session.update).not.toHaveBeenCalled();
+    });
+
+    test("should return 400 when idSession is not a uuid", async () => {
+      mockDB.Session.update.mockClear();
+
+      const res = await request
+        .post(`${baseUri}/new/on/server`)
+        .send({ idSession: "not-a-uuid" });
+
+      expect(res.status).toBe(400);
+      expect(mockDB.Session.update).not.toHaveBeenCalled();
     });
   });
 
@@ -191,21 +222,54 @@ describe("Session Controller", () => {
   });
 
   describe("DELETE /:id", () => {
-    test("should return 200 and number of deleted rows", async () => {
+    test("should only delete data within the session window", async () => {
+      // La suppression est BORNÉE à la fenêtre de la session : appelée avec le
+      // seul idSensor, elle effaçait tout l'historique du capteur.
       const session = {
         id: "session1",
         idSensor: sensors[0].id,
-        createdAt: new Date().toISOString(),
-        endedAt: new Date().toISOString(),
+        createdAt: new Date("2026-01-01T10:00:00Z").toISOString(),
+        endedAt: new Date("2026-01-01T11:00:00Z").toISOString(),
       };
 
       mockDB.Session.findByPk.mockResolvedValue(session);
       mockDB.Sensor.findByPk.mockResolvedValue(sensors[0]);
-      const deleteSensorDataMock = jest.fn().mockResolvedValue(10); // Assuming 10 rows deleted
-      mockDB.deleteSensorDataWithinTimeRange = deleteSensorDataMock;
+      mockDB.sensordata.destroy = jest.fn().mockResolvedValue(10);
 
       const res = await request.delete(`${baseUri}/${session.id}`);
-      expect(res.status).toBe(500);
+
+      expect(res.status).toBe(200);
+      expect(res.body.deletedRowsNumber).toBe(10);
+      // La clause where doit porter un filtre TEMPOREL, et pas seulement le
+      // capteur — sinon c'est tout l'historique qui part. Les bornes sont
+      // portées par un opérateur Sequelize (Symbol), donc invisibles à
+      // JSON.stringify : on inspecte les symboles.
+      const whereArg = mockDB.sensordata.destroy.mock.calls[0][0].where;
+      expect(whereArg.idSensor).toBe(sensors[0].id);
+      expect(whereArg.time).toBeDefined();
+      const bounds = Object.getOwnPropertySymbols(whereArg.time).map(
+        (sym) => whereArg.time[sym]
+      );
+      expect(JSON.stringify(bounds)).toContain("2026-01-01T10:00:00");
+      expect(JSON.stringify(bounds)).toContain("2026-01-01T11:00:00");
+    });
+
+    test("should delete nothing when the session window is empty", async () => {
+      const instant = new Date("2026-01-01T10:00:00Z").toISOString();
+      mockDB.Session.findByPk.mockResolvedValue({
+        id: "session-vide",
+        idSensor: sensors[0].id,
+        createdAt: instant,
+        endedAt: instant,
+      });
+      mockDB.Sensor.findByPk.mockResolvedValue(sensors[0]);
+      mockDB.sensordata.destroy = jest.fn();
+
+      const res = await request.delete(`${baseUri}/session-vide`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.deletedRowsNumber).toBe(0);
+      expect(mockDB.sensordata.destroy).not.toHaveBeenCalled();
     });
 
     test("should return 404 if session not found", async () => {

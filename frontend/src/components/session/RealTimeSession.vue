@@ -130,6 +130,10 @@
 						return "LIVE"
 					case "reconnecting":
 						return "RECONNEXION…"
+					case "forbidden":
+						// Distinct de « signal perdu » : c'est un refus d'autorisation,
+						// pas une absence de données du capteur.
+						return "ACCÈS REFUSÉ"
 					default:
 						return "SIGNAL PERDU"
 				}

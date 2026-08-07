@@ -10,7 +10,7 @@ import {
   getSensorStatus,
   getAllSensorsStatus,
 } from "@controllers/sensor";
-import { auth, authAdmin } from "@middlewares/auth";
+import { auth, authAdmin, requireSensorAccess } from "@middlewares/auth";
 
 const router = express.Router();
 
@@ -26,7 +26,7 @@ router
   .put(authAdmin, updateSensor)
   .delete(authAdmin, deleteSensor);
 // Depend at least on two models
-router.get("/:id/sessions", auth, getSensorSessions);
-router.get("/:id/topic", auth, getSensorTopic);
+router.get("/:id/sessions", auth, requireSensorAccess(), getSensorSessions);
+router.get("/:id/topic", auth, requireSensorAccess(), getSensorTopic);
 
 export { router as sensorRoutes };

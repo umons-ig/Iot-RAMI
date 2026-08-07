@@ -143,7 +143,9 @@ const useSession = () => {
 	const lastMessageTime = ref<Date | null>(null)
 	// État de connexion temps réel exposé à l'UI (badge LIVE / RECONNEXION…).
 	// Cf. PLAN_AMELIORATIONS §1.6.
-	const connectionState = ref<"connected" | "reconnecting" | "disconnected">("disconnected")
+	const connectionState = ref<"connected" | "reconnecting" | "disconnected" | "forbidden">(
+		"disconnected",
+	)
 	// Gel de l'affichage temps réel : quand `paused`, on cesse d'alimenter le
 	// graphe (le socket continue de tourner) pour inspecter la fenêtre courante.
 	const paused = ref(false)
@@ -281,6 +283,16 @@ const useSession = () => {
 		})
 		socket.on("connect_error", () => {
 			connectionState.value = "reconnecting"
+		})
+		// Le backend refuse désormais le join si l'utilisateur n'a pas accès au
+		// capteur. Sans cette écoute, le refus était SILENCIEUX : l'écran restait
+		// « LIVE » avec une courbe vide, ce qu'un soignant interprète comme
+		// « ce patient n'a pas d'activité » plutôt que « je n'ai pas le droit ».
+		socket.on("error", (payload: { code?: string; message?: string }) => {
+			if (payload?.code === "sensor.access.forbidden") {
+				connectionState.value = "forbidden"
+				console.warn("[session] accès refusé au capteur :", payload?.message)
+			}
 		})
 		// `socket.io` est le Manager (présent sur le vrai client, optionnel ici
 		// pour rester robuste aux mocks de test).

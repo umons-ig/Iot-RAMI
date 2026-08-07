@@ -6,11 +6,17 @@ const { Sensor, Session } = DB;
 // --- End of model(s) import
 import {
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   ServerErrorException,
 } from "@utils/exceptions";
 import { Role, UserPayload } from "#/user";
 import { getSensorsAvailable } from "@controllers/measurement";
+import {
+  getAccessibleSensorIds,
+  userHasSensorAccess,
+} from "@service/sensorAccess";
+import { Op } from "sequelize";
 import { discoveredTopics } from "@service/discorverdSensorSevice";
 
 const checkName = (name: string) => {
@@ -119,9 +125,23 @@ const createSensor = async (req: Request, res: Response) => {
   }
 };
 
-const getAllSensorsStatus = async (_: Request, res: Response) => {
+const getAllSensorsStatus = async (req: Request, res: Response) => {
   try {
-    const sensors = await Sensor.findAll({ attributes: ["id", "name"] });
+    // Restreint l'inventaire aux capteurs accessibles. Sans ce filtre, tout
+    // compte authentifié obtenait la liste exhaustive de la flotte ET, via le
+    // statut "publishing", quels patients sont sous surveillance à l'instant t.
+    // C'est aussi le point de départ commode pour cibler les autres endpoints :
+    // le nom de capteur suffit à dériver le topic.
+    const user = req.user as UserPayload | undefined;
+    const isAdmin = user?.role === Role.ADMIN;
+    const accessibleIds = isAdmin
+      ? null
+      : await getAccessibleSensorIds(user?.userId ?? "");
+
+    const sensors = await Sensor.findAll({
+      attributes: ["id", "name"],
+      ...(accessibleIds ? { where: { id: { [Op.in]: accessibleIds } } } : {}),
+    });
     const activeSessions = await Session.findAll({
       where: { endedAt: null },
       attributes: ["idSensor"],
@@ -152,6 +172,24 @@ const getSensorStatus = async (req: Request, res: Response) => {
         .status(400)
         .json(
           new BadRequestException("Invalid sensor name", "sensor.name.invalid")
+        );
+    }
+
+    // Pendant unitaire du filtrage appliqué à `getAllSensorsStatus` : sans lui,
+    // il suffisait d'interroger un capteur par son nom pour savoir s'il est en
+    // train de publier — donc si un patient est sous surveillance à cet instant.
+    const user = req.user as UserPayload | undefined;
+    if (
+      user?.role !== Role.ADMIN &&
+      !(await userHasSensorAccess(user?.userId ?? "", sensor.dataValues.id))
+    ) {
+      return res
+        .status(403)
+        .json(
+          new ForbiddenException(
+            "You do not have access to this sensor",
+            "sensor.access.forbidden"
+          )
         );
     }
     const activeSession = await Session.findOne({

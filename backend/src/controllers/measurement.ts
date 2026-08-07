@@ -246,7 +246,11 @@ const getMeasurement = async (req: Request, res: Response) => {
   }
 
   if (sensor && typeof sensor === "string" && !isAdmin) {
-    if (sensors.length > 0 && !sensors.includes(sensor)) {
+    // Le garde `sensors.length > 0 &&` rendait le contrôle inopérant pour un
+    // utilisateur SANS aucun capteur accordé : liste vide -> condition fausse
+    // -> pas de 403 -> filtre posé sur le capteur demandé. Fail-open exact à
+    // l'inverse du besoin. Une liste vide doit tout refuser.
+    if (!sensors.includes(sensor)) {
       return res
         .status(403)
         .json(
@@ -324,22 +328,21 @@ const getMeasurement = async (req: Request, res: Response) => {
 
   const attributesOptions = ["timestamp", "value"] as FindAttributeOptions;
 
+  // Plafond dur : sans `number`, la seconde branche faisait un findAll SANS
+  // limite — un dump complet de la table `Measurements` (deux jointures, tri)
+  // en une requête, déclenchable en boucle par tout compte authentifié.
+  const MAX_MEASUREMENTS = 10_000;
+  const effectiveLimit =
+    numberInt > 0 ? Math.min(numberInt, MAX_MEASUREMENTS) : MAX_MEASUREMENTS;
+
   try {
-    const result =
-      numberInt > 0
-        ? await Measurement.findAll({
-            include: includeOptions,
-            attributes: attributesOptions,
-            where: whereOptions,
-            limit: numberInt,
-            order: orderOptions,
-          })
-        : await Measurement.findAll({
-            include: includeOptions,
-            where: whereOptions,
-            attributes: attributesOptions,
-            order: orderOptions,
-          });
+    const result = await Measurement.findAll({
+      include: includeOptions,
+      attributes: attributesOptions,
+      where: whereOptions,
+      limit: effectiveLimit,
+      order: orderOptions,
+    });
 
     if (result.length === 0) {
       return res
@@ -666,6 +669,32 @@ const createMeasurements = async (req: Request, res: Response) => {
       sensorsInfo[
         sensorsInfo.findIndex((info) => info.name === sensor.dataValues.name)
       ].id = sensor.dataValues.id;
+    }
+
+    // Pendant en ÉCRITURE du contrôle d'accès appliqué en lecture : sans lui,
+    // tout compte authentifié pouvait insérer en masse des mesures sous
+    // l'identité du capteur d'un autre patient (falsification de données
+    // médicales). Les variantes unitaires create/update/delete ont ce garde ;
+    // seule la variante « bulk » l'avait perdu.
+    {
+      const decodedToken = req.user as UserPayload;
+      const isAdmin = decodedToken?.role === Role.ADMIN;
+      if (!isAdmin) {
+        const sensorsAvailable = await getSensorsAvailable(decodedToken);
+        const forbidden = sensorsInfo.filter(
+          (info) => info.id && !sensorsAvailable.includes(info.id)
+        );
+        if (forbidden.length > 0) {
+          return res
+            .status(403)
+            .json(
+              new ForbiddenException(
+                "You are not allowed to access this sensor",
+                "measurement.sensor.not.allowed"
+              )
+            );
+        }
+      }
     }
 
     // add sensors to measurements

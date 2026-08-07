@@ -149,20 +149,32 @@ const getSensorDataWithinTimeRange = async (
   idSensor: string,
   time1?: Date,
   time2?: Date,
-  limit?: number // undefined = pas de limite (export CSV uniquement)
+  limit?: number, // undefined = pas de limite (export CSV uniquement)
+  offset?: number // pagination : permet à l'export CSV de streamer par lots
 ) => {
   // Build the where clause using the utility function.
   const whereClause = buildSensorDataWhereClause(idSensor, time1, time2);
 
   const query: any = {
+    // Tri TOTAL, pas seulement par `time` : le format multi-mesures écrit
+    // plusieurs lignes au même horodatage (une par measureType), et un tri non
+    // total combiné à LIMIT/OFFSET ne garantit aucun ordre stable entre deux
+    // requêtes — sur l'export CSV paginé, un groupe d'ex æquo à cheval sur une
+    // frontière de lot pouvait être partiellement dupliqué ou omis, sans le
+    // moindre signal d'erreur. (time, idSensor, idMeasurementType) est la clé
+    // primaire, et idSensor est déjà fixé par la clause where.
     where: whereClause,
-    order: [["time", "ASC"]],
+    order: [
+      ["time", "ASC"],
+      ["idMeasurementType", "ASC"],
+    ],
     include: {
       model: MeasurementType,
       attributes: ["name"],
     },
   };
   if (limit !== undefined) query.limit = limit;
+  if (offset !== undefined) query.offset = offset;
 
   try {
     // Query the SensorData table with the constructed where clause.

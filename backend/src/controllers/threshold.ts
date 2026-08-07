@@ -4,10 +4,53 @@ import db from "@db/index";
 const DB: any = db;
 const { Threshold } = DB;
 // --- End of model(s) import
-import { BadRequestException, NotFoundException } from "@utils/exceptions";
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from "@utils/exceptions";
+import { userHasSensorAccess } from "@service/sensorAccess";
+import { Role, UserPayload } from "#/user";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Les seuils pilotent les alarmes médicales : sans ce contrôle, tout compte
+ * authentifié pouvait lire, créer, modifier ou supprimer les seuils de
+ * n'importe quel capteur — donc désactiver l'alarme d'un autre patient.
+ * Les admins passent toujours ; tout le reste est fail-closed.
+ */
+const assertSensorAccess = async (
+  req: Request,
+  idSensor: string
+): Promise<void> => {
+  const user = req.user as UserPayload | undefined;
+  if (user?.role === Role.ADMIN) return;
+  if (!user?.userId || !idSensor || !(await userHasSensorAccess(user.userId, idSensor))) {
+    throw new ForbiddenException(
+      "You do not have access to this sensor",
+      "threshold.sensor.forbidden"
+    );
+  }
+};
+
+const handleThresholdError = (error: unknown, res: Response, context: string) => {
+  if (error instanceof BadRequestException) {
+    return res.status(400).json({ error: error.message, code: error.codeError });
+  }
+  if (error instanceof ForbiddenException) {
+    return res.status(403).json({ error: error.message, code: error.codeError });
+  }
+  if (error instanceof NotFoundException) {
+    return res.status(404).json({ error: error.message, code: error.codeError });
+  }
+  console.error(context, error);
+  return res.status(500).json({
+    error: "Internal server error.",
+    code: "threshold.internal.error",
+  });
+};
 
 // Validation des bornes d'un seuil (cf. PLAN_AMELIORATIONS §2.6) : avant, on
 // pouvait créer un seuil avec min > max (jamais déclenché) ou des valeurs non
@@ -64,6 +107,7 @@ const createThreshold = async (req: Request, res: Response) => {
       );
     }
     validateThresholdValues(minValue, maxValue);
+    await assertSensorAccess(req, idSensor);
     const newThreshold = await Threshold.create({
       idSensor,
       idMeasurementType,
@@ -72,20 +116,13 @@ const createThreshold = async (req: Request, res: Response) => {
     });
     res.status(201).json(newThreshold);
   } catch (error) {
-    if (error instanceof BadRequestException) {
-      res.status(400).json({ error: error.message, code: error.codeError });
-    } else {
-      console.error("Error creating threshold:", error);
-      res.status(500).json({
-        error: "Internal server error.",
-        code: "threshold.internal.error",
-      });
-    }
+    handleThresholdError(error, res, "Error creating threshold:");
   }
 };
 const getThresholdBySensor = async (req: Request, res: Response) => {
   try {
     const { idSensor } = req.params;
+    await assertSensorAccess(req, idSensor);
     const thresholds = await Threshold.findAll({ where: { idSensor } });
     if (!thresholds || thresholds.length === 0) {
       throw new NotFoundException(
@@ -95,15 +132,7 @@ const getThresholdBySensor = async (req: Request, res: Response) => {
     }
     res.status(200).json(thresholds);
   } catch (error) {
-    if (error instanceof NotFoundException) {
-      res.status(404).json({ error: error.message, code: error.codeError });
-    } else {
-      console.error("Error fetching thresholds:", error);
-      res.status(500).json({
-        error: "Internal server error.",
-        code: "threshold.internal.error",
-      });
-    }
+    handleThresholdError(error, res, "Error fetching thresholds:");
   }
 };
 const updateThreshold = async (req: Request, res: Response) => {
@@ -117,6 +146,7 @@ const updateThreshold = async (req: Request, res: Response) => {
         "threshold.not.found"
       );
     }
+    await assertSensorAccess(req, threshold.idSensor);
     // Valide les bornes APRÈS fusion avec les valeurs existantes (§2.6).
     const mergedMin = minValue !== undefined ? minValue : threshold.minValue;
     const mergedMax = maxValue !== undefined ? maxValue : threshold.maxValue;
@@ -126,17 +156,7 @@ const updateThreshold = async (req: Request, res: Response) => {
     await threshold.save();
     res.status(200).json(threshold);
   } catch (error) {
-    if (error instanceof BadRequestException) {
-      res.status(400).json({ error: error.message, code: error.codeError });
-    } else if (error instanceof NotFoundException) {
-      res.status(404).json({ error: error.message, code: error.codeError });
-    } else {
-      console.error("Error updating threshold:", error);
-      res.status(500).json({
-        error: "Internal server error.",
-        code: "threshold.internal.error",
-      });
-    }
+    handleThresholdError(error, res, "Error updating threshold:");
   }
 };
 const deleteThreshold = async (req: Request, res: Response) => {
@@ -149,18 +169,11 @@ const deleteThreshold = async (req: Request, res: Response) => {
         "threshold.not.found"
       );
     }
+    await assertSensorAccess(req, threshold.idSensor);
     await threshold.destroy();
     res.status(200).json({ message: "Threshold deleted successfully." });
   } catch (error) {
-    if (error instanceof NotFoundException) {
-      res.status(404).json({ error: error.message, code: error.codeError });
-    } else {
-      console.error("Error deleting threshold:", error);
-      res.status(500).json({
-        error: "Internal server error.",
-        code: "threshold.internal.error",
-      });
-    }
+    handleThresholdError(error, res, "Error deleting threshold:");
   }
 };
 

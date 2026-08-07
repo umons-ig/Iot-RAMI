@@ -766,6 +766,66 @@ describe("Measurement controller", () => {
           sensor: measurement.idSensor,
         };
       });
+
+      // L'insertion en masse exige désormais l'accès aux capteurs visés. Ces
+      // tests portent sur la mécanique d'insertion, pas sur l'autorisation :
+      // on les exécute en admin. Le refus a son test dédié plus bas.
+      beforeEach(() => {
+        (jwt.verify as jest.Mock).mockReturnValue({
+          userId: "id-1",
+          role: Role.ADMIN,
+        });
+      });
+
+      test("should return a 403 when the user has no access to the target sensors", async () => {
+        // Un compte sans capteur accordé ne doit pas pouvoir insérer des
+        // mesures sous l'identité du capteur d'un autre patient.
+        (jwt.verify as jest.Mock).mockReturnValue({
+          userId: "id-1",
+          role: Role.REGULAR,
+        });
+        UserSensorAccess.findAll = jest.fn().mockResolvedValue([]);
+
+        const bulkCreate = jest.fn();
+        Measurement.bulkCreate = bulkCreate;
+
+        MeasurementType.findAll = jest.fn().mockResolvedValue([
+          {
+            dataValues: {
+              id: measurementsBulk[0].id,
+              name: measurementsBulk[0].type,
+            },
+          },
+          {
+            dataValues: {
+              id: measurementsBulk[1].id,
+              name: measurementsBulk[1].type,
+            },
+          },
+        ]);
+        Sensor.findAll = jest.fn().mockResolvedValue([
+          {
+            dataValues: {
+              id: measurementsBulk[0].id,
+              name: measurementsBulk[0].sensor,
+            },
+          },
+          {
+            dataValues: {
+              id: measurementsBulk[1].id,
+              name: measurementsBulk[1].sensor,
+            },
+          },
+        ]);
+
+        const result = await superTest(app)
+          .post(localBaseUri)
+          .send(measurementsBulk)
+          .set("Authorization", `Bearer 1234`);
+
+        expect(result.status).toBe(403);
+        expect(bulkCreate).not.toHaveBeenCalled();
+      });
       test("should return a 400 if no measurements are provided", async () => {
         const body = [] as string[];
         const result = await superTest(app)

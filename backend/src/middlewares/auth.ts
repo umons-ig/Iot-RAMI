@@ -151,4 +151,69 @@ const requireSessionAccess = async (
   }
 };
 
-export { auth, verifyToken, authAdmin, requireRole, requireSessionAccess };
+/**
+ * Vérifie que l'utilisateur authentifié a accès au CAPTEUR désigné par
+ * `req.params[paramName]` (défaut : `id`).
+ *
+ * À chaîner APRÈS `auth`. Les admins passent toujours.
+ * - Capteur introuvable -> 404
+ * - Pas d'accès         -> 403
+ *
+ * Pendant du garde `requireSessionAccess` pour les sous-ressources capteur
+ * (`/sensors/:id/topic`, `/sensors/:id/sessions`) : sans lui, tout compte
+ * authentifié pouvait récupérer le topic MQTT d'un capteur quelconque — la
+ * clé d'entrée pour écouter son flux ou lui pousser des commandes.
+ */
+const requireSensorAccess =
+  (paramName = "id") =>
+  async (req: Request, res: Response, next: () => void) => {
+    try {
+      const user = req.user as UserPayload;
+      if (user?.role === Role.ADMIN) {
+        return next();
+      }
+
+      const sensorId = req.params[paramName];
+      if (!sensorId) {
+        return res
+          .status(400)
+          .json(
+            new BadRequestException("Missing sensor id", "sensor.id.missing")
+          );
+      }
+
+      const sensor = await DB.Sensor.findByPk(sensorId);
+      if (!sensor) {
+        return res
+          .status(404)
+          .json(new NotFoundException("Sensor not found", "sensor.not.found"));
+      }
+
+      const allowed = await userHasSensorAccess(user.userId, sensorId);
+      if (!allowed) {
+        return res
+          .status(403)
+          .json(
+            new ForbiddenException(
+              "You do not have access to this sensor",
+              "sensor.access.forbidden"
+            )
+          );
+      }
+
+      return next();
+    } catch (error) {
+      return res
+        .status(500)
+        .json(new ServerErrorException("Server error !", "server.error"));
+    }
+  };
+
+export {
+  auth,
+  verifyToken,
+  authAdmin,
+  requireRole,
+  requireSessionAccess,
+  requireSensorAccess,
+};

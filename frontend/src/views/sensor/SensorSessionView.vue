@@ -39,6 +39,9 @@
 			const isStale = computed(() => isSessionActive.value && !!lastMessageTime.value && secondsSinceLast.value > STALE_THRESHOLD_S)
 
 			const connectionLabel = computed(() => {
+				// L'accès refusé passe AVANT « signal perdu » : sans distinction, un
+				// refus d'autorisation se lisait comme une absence d'activité du patient.
+				if (connectionState.value === "forbidden") return "ACCÈS REFUSÉ"
 				if (isStale.value) return "SIGNAL PERDU"
 				if (connectionState.value === "reconnecting") return "RECONNEXION…"
 				if (connectionState.value === "connected") return "LIVE"
@@ -46,6 +49,7 @@
 			})
 			// Classe d'état pour le style du badge.
 			const connectionVariant = computed(() => {
+				if (connectionState.value === "forbidden") return "lost"
 				if (isStale.value || connectionState.value === "disconnected") return "lost"
 				if (connectionState.value === "reconnecting") return "reconnecting"
 				return "live"

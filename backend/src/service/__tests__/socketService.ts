@@ -3,11 +3,25 @@ import SocketService from "@service/socketService";
 import db from "@db/index";
 import KafkaService from "@service/kafkaService";
 import * as discoveredMeasurementService from "@service/discoverdMeasurementService";
+import { userHasSensorAccess } from "@service/sensorAccess";
+import jwt from "jsonwebtoken";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
+jest.mock("jsonwebtoken", () => ({
+  __esModule: true,
+  default: { verify: jest.fn(), decode: jest.fn(), sign: jest.fn() },
+  verify: jest.fn(),
+}));
+
+jest.mock("@service/sensorAccess", () => ({
+  userHasSensorAccess: jest.fn(),
+  getAccessibleSensorIds: jest.fn(),
+  zoneGrantedSensorIds: jest.fn(),
+}));
+
 jest.mock("@db/index", () => ({
-  Sensor: { findAll: jest.fn() },
+  Sensor: { findAll: jest.fn(), findOne: jest.fn() },
   Session: { create: jest.fn(), update: jest.fn() },
   MeasurementType: { findAll: jest.fn() },
   sensordata: { bulkCreate: jest.fn() },
@@ -642,6 +656,98 @@ describe("SocketService", () => {
       (service as any).checkSilentSensors(now + 5_000);
 
       expect(emitMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("revalidateSocketAccess", () => {
+    const makeSocket = (rooms: string[], payload: any) => {
+      // Le socket porte le JETON ; la revalidation le re-vérifie (expiration,
+      // changement de rôle). On mocke jwt.verify pour rendre ce payload.
+      (jwt.verify as jest.Mock).mockReturnValue(payload);
+      return {
+        id: "socket-1",
+        rooms: new Set(["socket-1", ...rooms]),
+        data: { authToken: "jeton-de-test" },
+        leave: jest.fn(),
+        emit: jest.fn(),
+      };
+    };
+
+    beforeEach(() => {
+      (db as any).Sensor.findOne.mockResolvedValue({
+        dataValues: { id: "sensor-1" },
+      });
+    });
+
+    it("expulse un socket dont l'accès capteur a été retiré", async () => {
+      const socket = makeSocket(["capteur-a/sensor"], {
+        userId: "user-1",
+        role: "regular",
+      });
+      (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
+      (userHasSensorAccess as jest.Mock).mockResolvedValue(false);
+
+      await service.revalidateSocketAccess();
+
+      expect(socket.leave).toHaveBeenCalledWith("capteur-a/sensor");
+      expect(socket.emit).toHaveBeenCalledWith(
+        "error",
+        expect.objectContaining({ code: "sensor.access.forbidden" })
+      );
+    });
+
+    it("laisse en place un socket dont l'accès est toujours valide", async () => {
+      const socket = makeSocket(["capteur-a/sensor"], {
+        userId: "user-1",
+        role: "regular",
+      });
+      (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
+      (userHasSensorAccess as jest.Mock).mockResolvedValue(true);
+
+      await service.revalidateSocketAccess();
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it("ne touche ni à la room privée du socket ni à sa room utilisateur", async () => {
+      const socket = makeSocket(["user-user-1"], {
+        userId: "user-1",
+        role: "regular",
+      });
+      (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
+      (userHasSensorAccess as jest.Mock).mockResolvedValue(false);
+
+      await service.revalidateSocketAccess();
+
+      // `socket-1` (room propre) et `user-…` ne sont pas des rooms de capteur.
+      expect(socket.leave).not.toHaveBeenCalled();
+    });
+
+    it("laisse les admins en place sans interroger la base", async () => {
+      const socket = makeSocket(["capteur-a/sensor"], {
+        userId: "admin-1",
+        role: "admin",
+      });
+      (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
+
+      await service.revalidateSocketAccess();
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(userHasSensorAccess).not.toHaveBeenCalled();
+    });
+
+    it("expulse en cas d'erreur de vérification (fail-closed)", async () => {
+      const socket = makeSocket(["capteur-a/sensor"], {
+        userId: "user-1",
+        role: "regular",
+      });
+      (service as any).io.fetchSockets = jest.fn().mockResolvedValue([socket]);
+      (userHasSensorAccess as jest.Mock).mockRejectedValue(new Error("db down"));
+
+      await service.revalidateSocketAccess();
+
+      expect(socket.leave).toHaveBeenCalledWith("capteur-a/sensor");
     });
   });
 });

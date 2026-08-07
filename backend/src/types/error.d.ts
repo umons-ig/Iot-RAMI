@@ -13,6 +13,7 @@ type APISensorErrors =
   | "sensor.id.required"
   | "sensor.id.not.string"
   | "sensor.id.not.uuid"
+  | "sensor.id.missing"
   | "sensor.name.invalid"
   | "sensor.already.exists";
 
@@ -29,6 +30,7 @@ type APISessionErrors =
   | "session.is.already.closed"
   | "session.not.found"
   | "session.access.forbidden"
+  | "session.id.not.uuid"
   | "sensor.access.forbidden";
 
 type APIUserSensorErrors =
@@ -163,7 +165,8 @@ type AuthErrors =
   | "auth.token.not.found"
   | "auth.token.not.valid"
   | "auth.token.not.present"
-  | "auth.token.unauthorized";
+  | "auth.token.unauthorized"
+  | "auth.token.revoked";
 
 type APIThresholdErrors =
   | "threshold.not.found"
@@ -171,7 +174,8 @@ type APIThresholdErrors =
   | "threshold.already.exists"
   | "threshold.invalid.id"
   | "threshold.invalid.value"
-  | "threshold.invalid.range";
+  | "threshold.invalid.range"
+  | "threshold.sensor.forbidden";
 
 type APIZoneErrors =
   | "zone.name.required"

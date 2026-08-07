@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import {
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   ServerErrorException,
 } from "@utils/exceptions";
@@ -13,7 +14,10 @@ import {
 // Model import
 import { Op, QueryTypes } from "sequelize";
 import { Role, UserPayload } from "#/user";
-import { getAccessibleSensorIds } from "@service/sensorAccess";
+import {
+  getAccessibleSensorIds,
+  userHasSensorAccess,
+} from "@service/sensorAccess";
 import db from "@db/index";
 const DB: any = db;
 const { Sensor, Session, sequelize } = DB;
@@ -78,6 +82,25 @@ const createSessionOnClientSide = async (req: Request, res: Response) => {
         .json(new NotFoundException("Sensor not found", "sensor.not.found"));
     }
 
+    // La réponse divulgue le topic MQTT du capteur — la clé d'entrée pour
+    // écouter son flux ou lui pousser des commandes. Sans ce contrôle, tout
+    // compte authentifié pouvait l'obtenir pour un capteur quelconque et
+    // ouvrir une session dessus.
+    const user = req.user as UserPayload | undefined;
+    if (
+      user?.role !== Role.ADMIN &&
+      !(await userHasSensorAccess(user?.userId ?? "", idSensor))
+    ) {
+      return res
+        .status(403)
+        .json(
+          new ForbiddenException(
+            "You do not have access to this sensor",
+            "sensor.access.forbidden"
+          )
+        );
+    }
+
     const topicForHearingFromSensor = sensor.topic;
 
     const session = await Session.create({
@@ -98,7 +121,40 @@ const createSessionOnClientSide = async (req: Request, res: Response) => {
 const createSessionOnServerSide = async (req: Request, res: Response) => {
   const { idSession } = req.body;
 
+  if (!isUuid(idSession)) {
+    return res
+      .status(400)
+      .json(
+        new BadRequestException("session id is not uuid", "session.id.not.uuid")
+      );
+  }
+
   try {
+    // Sans ce contrôle, n'importe quel compte authentifié pouvait clore la
+    // session de mesure d'un autre patient en devinant/énumérant son id.
+    const session = await Session.findByPk(idSession);
+    if (!session) {
+      return res
+        .status(404)
+        .json(new NotFoundException("Session not found", "session.not.found"));
+    }
+
+    const user = req.user as UserPayload | undefined;
+    const idSensor = session.dataValues?.idSensor ?? session.idSensor;
+    if (
+      user?.role !== Role.ADMIN &&
+      !(await userHasSensorAccess(user?.userId ?? "", idSensor))
+    ) {
+      return res
+        .status(403)
+        .json(
+          new ForbiddenException(
+            "You do not have access to this session",
+            "session.access.forbidden"
+          )
+        );
+    }
+
     await Session.update({ endedAt: new Date() }, { where: { id: idSession } });
     return res.status(201).json({ message: "session ended" });
   } catch (error) {
@@ -203,9 +259,29 @@ const deleteSessionAndItsCorrespondingData = async (
         .json(new NotFoundException("Sensor not found", "sensor.not.found"));
     }
 
-    const deletedRowsNumber = await deleteSensorDataWithinTimeRange(
-      session.idSensor
+    // Bornes de la session OBLIGATOIRES : appelée avec le seul idSensor, la
+    // fonction supprime TOUT l'historique du capteur (`buildSensorDataWhereClause`
+    // n'ajoute aucun filtre temporel sans time1/time2). Supprimer une session
+    // d'une heure effaçait donc des mois de données médicales, sans avertissement.
+    const startedAt = new Date(
+      session.dataValues?.createdAt ?? session.createdAt
     );
+    const endedAt = new Date(
+      session.dataValues?.endedAt ?? session.endedAt ?? new Date()
+    );
+
+    // Fenêtre vide (session ouverte et refermée dans le même instant) : il n'y a
+    // rien à supprimer. On le dit explicitement plutôt que de laisser la
+    // validation temporelle répondre 400, qui laisserait croire à une requête
+    // malformée.
+    const deletedRowsNumber =
+      endedAt.getTime() > startedAt.getTime()
+        ? await deleteSensorDataWithinTimeRange(
+            session.idSensor,
+            startedAt,
+            endedAt
+          )
+        : 0;
 
     //await session.destroy();
     return res.status(200).json({ deletedRowsNumber: deletedRowsNumber });
@@ -246,10 +322,17 @@ const getSessionData = async (req: Request, res: Response) => {
     const startTime = session.dataValues.createdAt;
     const endTime = session.dataValues.endedAt ?? new Date();
 
+    // `maxPoints` alimente le sous-échantillonnage : non plafonné, il servait à
+    // contourner la limite de 10 000 points de la branche sans downsampling.
+    const MAX_POINTS = 10_000;
     const maxPointsParam = req.query.maxPoints;
-    const maxPoints = maxPointsParam
+    const parsedMaxPoints = maxPointsParam
       ? parseInt(maxPointsParam as string, 10)
       : 0;
+    const maxPoints =
+      Number.isFinite(parsedMaxPoints) && parsedMaxPoints > 0
+        ? Math.min(parsedMaxPoints, MAX_POINTS)
+        : 0;
 
     const sensorData =
       maxPoints > 0
@@ -295,36 +378,101 @@ const exportSessionAsCsv = async (req: Request, res: Response) => {
         .status(404)
         .json(new NotFoundException("Sensor not found", "sensor.not.found"));
     }
-    const sensorData = await getSensorDataWithinTimeRange(
-      sensor.dataValues.id,
-      session.dataValues.createdAt,
-      session.dataValues.endedAt ?? new Date()
-    );
-    const lines: string[] = [
-      `# session_id,${session.dataValues.id}`,
-      `# sensor_id,${sensor.dataValues.id}`,
-      `# sensor_name,${sanitizeCsvField(sensor.dataValues.name)}`,
-      `# sensor_topic,${sanitizeCsvField(sensor.dataValues.topic)}`,
-      `# start_time,${new Date(session.dataValues.createdAt).toISOString()}`,
-      `# end_time,${
-        session.dataValues.endedAt
-          ? new Date(session.dataValues.endedAt).toISOString()
-          : ""
-      }`,
-      `time,value,type`,
-      ...sensorData.map(
-        (row: any) =>
-          `${new Date(row.time).toISOString()},${sanitizeCsvField(
-            String(row.value)
-          )},${sanitizeCsvField(row.MeasurementType.name)}`
-      ),
-    ];
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="session-${id}.csv"`
     );
-    return res.status(200).send(lines.join("\n"));
+
+    // En-tête écrit immédiatement, puis les données par LOTS.
+    // L'ancienne version matérialisait toute la session en mémoire trois fois
+    // (lignes SQL, tableau de chaînes, puis `join`) : sur une session ECG longue
+    // — plusieurs centaines de milliers de points — le processus Node saturait
+    // la mémoire du Raspberry Pi, et n'importe quel utilisateur authentifié
+    // pouvait déclencher ce déni de service en boucle.
+    res.write(
+      [
+        `# session_id,${session.dataValues.id}`,
+        `# sensor_id,${sensor.dataValues.id}`,
+        `# sensor_name,${sanitizeCsvField(sensor.dataValues.name)}`,
+        `# sensor_topic,${sanitizeCsvField(sensor.dataValues.topic)}`,
+        `# start_time,${new Date(session.dataValues.createdAt).toISOString()}`,
+        `# end_time,${
+          session.dataValues.endedAt
+            ? new Date(session.dataValues.endedAt).toISOString()
+            : ""
+        }`,
+        `time,value,type`,
+        "",
+      ].join("\n")
+    );
+
+    const CSV_BATCH_SIZE = 10_000;
+    const endedAt = session.dataValues.endedAt ?? new Date();
+    let offset = 0;
+    // Le client peut couper à tout moment ; sans ce drapeau, la boucle
+    // continuait d'interroger la base et d'attendre un `drain` qui ne viendrait
+    // jamais, retenant la connexion et le lot en mémoire indéfiniment.
+    let aborted = false;
+    const onClose = () => {
+      aborted = true;
+    };
+    res.on("close", onClose);
+
+    try {
+      while (!aborted) {
+        const batch = await getSensorDataWithinTimeRange(
+          sensor.dataValues.id,
+          session.dataValues.createdAt,
+          endedAt,
+          CSV_BATCH_SIZE,
+          offset
+        );
+        if (!batch || batch.length === 0) break;
+
+        const chunk = batch
+          .map(
+            (row: any) =>
+              `${new Date(row.time).toISOString()},${sanitizeCsvField(
+                String(row.value)
+              )},${sanitizeCsvField(row.MeasurementType.name)}`
+          )
+          .join("\n");
+
+        // `write` renvoie false quand le tampon est plein : on attend le drain
+        // pour ne pas accumuler côté serveur si le client télécharge lentement.
+        // On attend AUSSI `close`, sinon une déconnexion pendant l'attente
+        // laisserait cette promesse pendante pour toujours.
+        if (!res.write(chunk + "\n")) {
+          await new Promise<void>((resolve) => {
+            const done = () => {
+              res.off("drain", done);
+              res.off("close", done);
+              resolve();
+            };
+            res.once("drain", done);
+            res.once("close", done);
+          });
+        }
+
+        if (batch.length < CSV_BATCH_SIZE) break;
+        offset += CSV_BATCH_SIZE;
+      }
+    } catch (streamError) {
+      // Les en-têtes sont déjà partis : impossible de renvoyer un JSON d'erreur
+      // ici — `res.status().json()` lèverait ERR_HTTP_HEADERS_SENT, et le rejet
+      // remonterait en exception non capturée, ce qui tue le process (donc
+      // toutes les sessions ECG en cours). On coupe la réponse : le client verra
+      // un téléchargement tronqué, ce qui est le seul signal possible à ce stade.
+      console.error("[exportSessionAsCsv] échec en cours de flux:", streamError);
+      res.destroy();
+      return;
+    } finally {
+      res.off("close", onClose);
+    }
+
+    if (aborted) return;
+    return res.end();
   } catch (error) {
     return handleDealingWithSensorDataError(res, error);
   }

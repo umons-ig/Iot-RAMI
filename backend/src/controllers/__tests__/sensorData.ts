@@ -115,7 +115,12 @@ describe("SensorData Controller", () => {
 
       expect(sensordata.findAll).toHaveBeenCalledWith({
         where: { idSensor },
-        order: [["time", "ASC"]],
+        // Tri TOTAL : `time` seul laisse les lignes multi-mesures ex æquo dans
+        // un ordre non garanti, ce qui casse la pagination de l'export CSV.
+        order: [
+          ["time", "ASC"],
+          ["idMeasurementType", "ASC"],
+        ],
         include: { model: undefined, attributes: ["name"] },
       });
       expect(result).toEqual(mockSensorData);
@@ -139,7 +144,12 @@ describe("SensorData Controller", () => {
             [Op.between]: [time1, time2],
           },
         },
-        order: [["time", "ASC"]],
+        // Tri TOTAL : `time` seul laisse les lignes multi-mesures ex æquo dans
+        // un ordre non garanti, ce qui casse la pagination de l'export CSV.
+        order: [
+          ["time", "ASC"],
+          ["idMeasurementType", "ASC"],
+        ],
         include: { model: undefined, attributes: ["name"] },
       });
       expect(result).toEqual(mockSensorData);

@@ -9,6 +9,8 @@ import type { MeasurementTypeModel } from "#/measurementType";
 import type { Threshold } from "#/threshold";
 import { addDiscoveredTopic } from "@service/discorverdSensorSevice";
 import { addDiscoveredMeasurement } from "@service/discoverdMeasurementService";
+import { userHasSensorAccess } from "@service/sensorAccess";
+import { Role, UserPayload } from "#/user";
 import * as dlq from "@service/dlqService";
 import {
   activeSessionsTotal,
@@ -70,16 +72,50 @@ class SocketService {
 
   public initialize() {
     this.io.on("connection", (socket) => {
-      socket.on("join-session", (data: { token: string; topic: string }) => {
-        try {
-          jwt.verify(data.token, envs.JWT_SECRET);
+      socket.on(
+        "join-session",
+        async (data: { token: string; topic: string }) => {
+          let payload: UserPayload;
+          try {
+            payload = jwt.verify(data.token, envs.JWT_SECRET) as UserPayload;
+          } catch (error) {
+            console.error("Invalid JWT token for socket connection:", error);
+            socket.disconnect();
+            return;
+          }
+
+          // Le JWT prouve l'IDENTITÉ, pas le DROIT d'écouter ce capteur. Sans le
+          // contrôle ci-dessous, tout compte authentifié pouvait rejoindre la
+          // room d'un topic arbitraire et recevoir l'ECG temps réel d'un autre
+          // patient — le canal WebSocket contournait entièrement le contrôle
+          // d'accès appliqué côté REST (`requireSessionAccess`).
+          try {
+            if (!(await this.userMayJoinTopic(payload, data.topic))) {
+              socket.emit("error", {
+                message: "You do not have access to this sensor",
+                code: "sensor.access.forbidden",
+              });
+              return; // refus ciblé : le socket garde ses rooms légitimes
+            }
+          } catch (error) {
+            console.error("[join-session] access check failed:", error);
+            socket.emit("error", {
+              message: "Access check failed",
+              code: "sensor.access.error",
+            });
+            return; // fail-closed
+          }
+
+          // On conserve le JETON, pas le payload décodé : la revalidation le
+          // re-vérifie, ce qui fait aussi expirer les sockets dont le JWT n'est
+          // plus valable et prend en compte un changement de rôle. Garder le
+          // payload figé aurait maintenu un socket ouvert indéfiniment avec les
+          // droits qu'il avait au moment du join.
+          (socket.data as any).authToken = data.token;
           socket.join(data.topic);
           socket.emit("joined", { topic: data.topic });
-        } catch (error) {
-          console.error("Invalid JWT token for socket connection:", error);
-          socket.disconnect();
         }
-      });
+      );
 
       socket.on("join-user-room", (data: { token: string }) => {
         try {
@@ -94,6 +130,8 @@ class SocketService {
     });
     // Surveillance « capteur muet » (§4.2).
     this.startWatchdog();
+    // Coupe le flux des sockets dont l'accès capteur a été retiré entre-temps.
+    this.startAccessRevalidation();
   }
   public sendDataToRoom(topic: string, data: KafkaPayload) {
     this.io.to(topic).emit("new-data", data);
@@ -174,6 +212,9 @@ class SocketService {
   private lastDataAt: Map<string, number> = new Map();
   private silentTopics: Set<string> = new Set();
   private watchdogInterval: NodeJS.Timeout | undefined;
+  private accessRevalidationInterval: NodeJS.Timeout | undefined;
+  // Fenêtre pendant laquelle un accès révoqué reste effectif sur un socket ouvert.
+  private readonly ACCESS_REVALIDATION_MS = 60_000;
   // Seuil de silence (ms) au-delà duquel un capteur en session est déclaré muet.
   private readonly SILENCE_THRESHOLD_MS = Number(
     process.env.SENSOR_SILENCE_THRESHOLD_MS ?? 15_000
@@ -245,6 +286,42 @@ class SocketService {
     });
     this.sensorCacheTime = now;
     return this.sensorTopicCache.get(baseTopic);
+  }
+
+  /**
+   * Autorisation d'écoute d'une room WebSocket. La room porte le topic capteur
+   * complet (`<nom>/sensor`, cf. `sendDataToRoom(data.sensorTopic)`) alors que
+   * les capteurs sont enregistrés sous leur topic de base : on normalise avant
+   * lookup, en ne retirant `/sensor` QU'EN SUFFIXE (un `replace` simple aurait
+   * amputé un topic légitime du type `batimentA/sensors/ecg-12`).
+   *
+   * Le lookup ne passe PAS par `getSensorByTopic` : ce cache à TTL 5 min sert la
+   * voie de données, et un capteur enregistré il y a moins de 5 minutes en est
+   * absent — un utilisateur pourtant autorisé se serait vu refuser le flux
+   * jusqu'à l'expiration du cache. Une décision d'autorisation se prend sur
+   * l'état courant de la base.
+   *
+   * Fail-closed : un topic qui ne correspond à aucun capteur enregistré (topic
+   * seulement auto-découvert, ou forgé par le client) est refusé aux non-admins.
+   */
+  private async userMayJoinTopic(
+    payload: UserPayload,
+    topic: string
+  ): Promise<boolean> {
+    if (payload?.role === Role.ADMIN) return true;
+    if (!payload?.userId || typeof topic !== "string" || !topic) return false;
+
+    const SUFFIX = "/sensor";
+    const baseTopic = topic.endsWith(SUFFIX)
+      ? topic.slice(0, -SUFFIX.length)
+      : topic;
+    if (!baseTopic) return false;
+
+    const sensor = await SensorModel.findOne({ where: { topic: baseTopic } });
+    const sensorId = sensor?.dataValues?.id ?? (sensor as any)?.id;
+    if (!sensorId) return false;
+
+    return userHasSensorAccess(payload.userId, sensorId);
   }
 
   private async handleSessionStart(data: KafkaStartPayload): Promise<void> {
@@ -527,6 +604,78 @@ class SocketService {
     }
   }
 
+  /**
+   * Revalide périodiquement l'autorisation des sockets déjà dans une room.
+   *
+   * L'autorisation est évaluée au `join`, mais un socket vit longtemps : sans
+   * cette boucle, un opérateur à qui l'on RETIRE l'accès à un capteur continuait
+   * de recevoir son ECG tant qu'il gardait l'onglet ouvert.
+   */
+  public startAccessRevalidation(): void {
+    if (this.accessRevalidationInterval) return;
+    this.accessRevalidationInterval = setInterval(
+      () => {
+        this.revalidateSocketAccess().catch((error) =>
+          console.error("[access-revalidation] échec:", error)
+        );
+      },
+      this.ACCESS_REVALIDATION_MS
+    );
+  }
+
+  public stopAccessRevalidation(): void {
+    if (this.accessRevalidationInterval) {
+      clearInterval(this.accessRevalidationInterval);
+      this.accessRevalidationInterval = undefined;
+    }
+  }
+
+  // Exposé pour les tests : un passage de revalidation.
+  public async revalidateSocketAccess(): Promise<void> {
+    const sockets = await this.io.fetchSockets();
+    for (const socket of sockets) {
+      const token = (socket.data as any)?.authToken as string | undefined;
+      if (!token) continue;
+
+      // Re-vérification du jeton : couvre l'expiration et un rôle modifié
+      // depuis le join. Un jeton devenu invalide fait quitter toutes les rooms.
+      let payload: UserPayload;
+      try {
+        payload = jwt.verify(token, envs.JWT_SECRET) as UserPayload;
+      } catch {
+        for (const room of socket.rooms) {
+          if (room === socket.id || room.startsWith("user-")) continue;
+          socket.leave(room);
+        }
+        socket.emit("error", {
+          message: "Session expired, please reconnect",
+          code: "auth.token.expired",
+        });
+        continue;
+      }
+
+      for (const room of socket.rooms) {
+        // socket.io place l'id du socket dans ses rooms, et `user-<id>` ne
+        // dépend que du token : ni l'un ni l'autre n'est une room de capteur.
+        if (room === socket.id || room.startsWith("user-")) continue;
+
+        const stillAllowed = await this.userMayJoinTopic(payload, room).catch(
+          () => false // fail-closed
+        );
+        if (!stillAllowed) {
+          socket.leave(room);
+          socket.emit("error", {
+            message: "Your access to this sensor has been revoked",
+            code: "sensor.access.forbidden",
+          });
+          console.warn(
+            `[access-revalidation] accès révoqué pour ${payload.userId} sur ${room}`
+          );
+        }
+      }
+    }
+  }
+
   // Exposé pour les tests : un passage de surveillance.
   public checkSilentSensors(now: number = Date.now()): void {
     for (const [topic] of this.activeSessions) {
@@ -551,6 +700,7 @@ class SocketService {
 
   public async close(): Promise<void> {
     this.stopWatchdog();
+    this.stopAccessRevalidation();
     const now = new Date();
     for (const [, sessionId] of this.activeSessions) {
       await Session.update({ endedAt: now }, { where: { id: sessionId } });

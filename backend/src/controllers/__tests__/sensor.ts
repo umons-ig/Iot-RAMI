@@ -912,7 +912,28 @@ describe("Sensor controller", () => {
       expect(result.body.codeError).toBe("sensor.name.invalid");
     });
 
+    test("should return 403 for a user without access to that sensor", async () => {
+      // Le statut révèle si un patient est sous surveillance : il ne doit pas
+      // être lisible pour un capteur auquel l'utilisateur n'a pas accès.
+      SensorModel.findOne = jest.fn().mockResolvedValue(sensorMock);
+      SessionModel.findOne = jest.fn().mockResolvedValue(null);
+      // Aucun grant direct ; l'accès par zone dégrade en « aucun accès ».
+      UserSensorAccess.findOne = jest.fn().mockResolvedValue(null);
+
+      const result = await superTest(app)
+        .get(`${baseUri}/connexion/online/${sensors[0].name}`)
+        .set("Authorization", `Bearer 1234`);
+
+      expect(result.status).toBe(403);
+      expect(result.body.codeError).toBe("sensor.access.forbidden");
+    });
+
     test("should return 'publishing' if sensor has an active session", async () => {
+      // Les deux cas nominaux portent sur publishing/offline, pas sur
+      // l'autorisation : on les exécute en admin (le refus a son test dédié).
+      jwt.verify = jest
+        .fn()
+        .mockReturnValue({ userId: "id-1", role: Role.ADMIN });
       SensorModel.findOne = jest.fn().mockResolvedValue(sensorMock);
       SessionModel.findOne = jest
         .fn()
@@ -927,6 +948,9 @@ describe("Sensor controller", () => {
     });
 
     test("should return 'offline' if sensor has no active session", async () => {
+      jwt.verify = jest
+        .fn()
+        .mockReturnValue({ userId: "id-1", role: Role.ADMIN });
       SensorModel.findOne = jest.fn().mockResolvedValue(sensorMock);
       SessionModel.findOne = jest.fn().mockResolvedValue(null);
 
