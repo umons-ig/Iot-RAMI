@@ -35,9 +35,13 @@ services:
       - FIRMWARE_ENV=${FIRMWARE_ENV:-universal}
       - FIRMWARE_VERSION=${FIRMWARE_VERSION:-v0.0.0}
     ports:
-      # Métriques Prometheus du fog, à scraper depuis le cloud (idéalement via
-      # WireGuard). Restreindre la source au firewall si exposé sur le LAN.
-      - "9100:9100"
+      # Métriques Prometheus du fog. Publiées sur la LOOPBACK du Pi par défaut :
+      # exposées sur toutes les interfaces, elles livraient sans authentification
+      # l'état du fog (activité des capteurs, volumétrie) à tout le réseau.
+      # Aucun Prometheus ne scrape le fog aujourd'hui (job `rami-fog` commenté
+      # dans monitoring/prometheus.yml). Pour un scrape distant, passer par
+      # WireGuard et mettre METRICS_BIND=<ip-wireguard> plutôt que 0.0.0.0.
+      - "${METRICS_BIND:-127.0.0.1}:9100:9100"
       # Console de gestion. Par DÉFAUT sur le localhost du Pi (accès par tunnel SSH :
       # ssh -L 9200:localhost:9200 pi@<pi>). Pour y accéder depuis le LAN (ex. ton
       # PC), mettre MGMT_BIND=0.0.0.0 dans le .env -> MGMT_TOKEN OBLIGATOIRE

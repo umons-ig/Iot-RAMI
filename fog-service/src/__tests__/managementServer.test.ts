@@ -6,13 +6,18 @@ import {
   isAuthorized,
   verifyPassword,
   sessionTokenFor,
+  verifySessionToken,
+  SESSION_TTL_MS,
+  isLoginRateLimited,
+  registerLoginFailure,
+  clearLoginAttempts,
   DeviceCommandProvider,
 } from "../managementServer";
 
 describe("checkToken", () => {
-  it("pas de token configuré -> autorisé", () => {
-    expect(checkToken(undefined, "")).toBe(true);
-    expect(checkToken("nimporte", "")).toBe(true);
+  it("pas de token configuré -> REFUSÉ (fail-closed)", () => {
+    expect(checkToken(undefined, "")).toBe(false);
+    expect(checkToken("nimporte", "")).toBe(false);
   });
   it("token configuré -> exige une correspondance exacte", () => {
     expect(checkToken("secret", "secret")).toBe(true);
@@ -23,21 +28,74 @@ describe("checkToken", () => {
 });
 
 describe("isAuthorized", () => {
-  it("aucune auth configurée -> autorisé", () => {
-    expect(isAuthorized(undefined, "", "")).toBe(true);
+  it("aucune auth configurée -> REFUSÉ (fail-closed)", () => {
+    // Sans MGMT_TOKEN ni MGMT_PASSWORD, l'API qui pousse l'OTA sur toute la
+    // flotte doit rester fermée, pas s'ouvrir à tout le monde.
+    expect(isAuthorized(undefined, "", "")).toBe(false);
+    expect(isAuthorized("nimporte", "", "")).toBe(false);
   });
   it("token statique : correspondance exacte", () => {
     expect(isAuthorized("tok", "tok", "")).toBe(true);
     expect(isAuthorized("x", "tok", "")).toBe(false);
     expect(isAuthorized(undefined, "tok", "")).toBe(false);
   });
-  it("jeton dérivé du mot de passe (stable sans état)", () => {
+  it("jeton de session signé, valable sans état serveur", () => {
     const t = sessionTokenFor("pwd");
     expect(isAuthorized(t, "", "pwd")).toBe(true);
     expect(isAuthorized("autre", "", "pwd")).toBe(false);
     expect(isAuthorized(undefined, "", "pwd")).toBe(false); // mdp configuré -> auth requise
-    // Le jeton est déterministe -> identique à travers les redémarrages.
-    expect(sessionTokenFor("pwd")).toBe(t);
+    // Un jeton émis pour un autre mot de passe ne passe pas.
+    expect(isAuthorized(sessionTokenFor("autre-pwd"), "", "pwd")).toBe(false);
+  });
+});
+
+describe("verifySessionToken", () => {
+  it("accepte un jeton valide et non expiré", () => {
+    expect(verifySessionToken(sessionTokenFor("pwd"), "pwd")).toBe(true);
+  });
+  it("refuse un jeton expiré", () => {
+    const now = Date.now();
+    const token = sessionTokenFor("pwd", SESSION_TTL_MS, now);
+    expect(verifySessionToken(token, "pwd", now + SESSION_TTL_MS + 1)).toBe(false);
+  });
+  it("refuse une expiration falsifiée (la signature couvre l'expiration)", () => {
+    const token = sessionTokenFor("pwd");
+    const mac = token.slice(token.indexOf(".") + 1);
+    const forged = `${Date.now() + 10 * 365 * 24 * 3600 * 1000}.${mac}`;
+    expect(verifySessionToken(forged, "pwd")).toBe(false);
+  });
+  it("refuse un jeton malformé", () => {
+    expect(verifySessionToken("", "pwd")).toBe(false);
+    expect(verifySessionToken("sansPoint", "pwd")).toBe(false);
+    expect(verifySessionToken(".abc", "pwd")).toBe(false);
+    expect(verifySessionToken("abc.def", "pwd")).toBe(false);
+  });
+  it("ne révèle pas le mot de passe en clair", () => {
+    expect(sessionTokenFor("pwd")).not.toContain("pwd");
+  });
+});
+
+describe("limitation des tentatives de login", () => {
+  it("bloque après 10 échecs puis se réarme après la fenêtre", () => {
+    const ip = "10.0.0.42";
+    clearLoginAttempts(ip);
+    const now = Date.now();
+    for (let i = 0; i < 9; i += 1) registerLoginFailure(ip, now);
+    expect(isLoginRateLimited(ip, now)).toBe(false);
+    registerLoginFailure(ip, now);
+    expect(isLoginRateLimited(ip, now)).toBe(true);
+    // La fenêtre est glissante : passé son terme, l'IP repart à zéro.
+    expect(isLoginRateLimited(ip, now + 15 * 60 * 1000 + 1)).toBe(false);
+    clearLoginAttempts(ip);
+  });
+  it("un login réussi remet le compteur à zéro", () => {
+    const ip = "10.0.0.43";
+    clearLoginAttempts(ip);
+    const now = Date.now();
+    for (let i = 0; i < 10; i += 1) registerLoginFailure(ip, now);
+    expect(isLoginRateLimited(ip, now)).toBe(true);
+    clearLoginAttempts(ip);
+    expect(isLoginRateLimited(ip, now)).toBe(false);
   });
 });
 
@@ -77,17 +135,30 @@ describe("buildStatus", () => {
 });
 
 describe("buildCommandPayload", () => {
-  it("ota: nécessite une url http(s) valide", () => {
-    expect(buildCommandPayload("ota", { url: "http://f/u.bin" })).toEqual({
+  it("ota: exige une url HTTPS", () => {
+    expect(buildCommandPayload("ota", { url: "https://f/u.bin" })).toEqual({
       cmd: "ota",
-      url: "http://f/u.bin",
+      url: "https://f/u.bin",
     });
-    expect(buildCommandPayload("ota", { url: "https://f/u.bin" })).toMatchObject({ cmd: "ota" });
     expect(buildCommandPayload("ota", {})).toBeNull();
+    // http:// rejeté : en clair, un attaquant sur le chemin réseau substitue le
+    // binaire et fait exécuter un firmware arbitraire sur le capteur.
+    expect(buildCommandPayload("ota", { url: "http://f/u.bin" })).toBeNull();
     // Schémas non http(s) rejetés.
     expect(buildCommandPayload("ota", { url: "file:///etc/passwd" })).toBeNull();
     expect(buildCommandPayload("ota", { url: "ftp://x/y.bin" })).toBeNull();
     expect(buildCommandPayload("ota", { url: "javascript:alert(1)" })).toBeNull();
+  });
+
+  it("ota: http:// n'est accepté que via ALLOW_INSECURE_OTA (banc de test)", () => {
+    const previous = process.env.ALLOW_INSECURE_OTA;
+    process.env.ALLOW_INSECURE_OTA = "true";
+    expect(buildCommandPayload("ota", { url: "http://f/u.bin" })).toEqual({
+      cmd: "ota",
+      url: "http://f/u.bin",
+    });
+    process.env.ALLOW_INSECURE_OTA = previous;
+    expect(buildCommandPayload("ota", { url: "http://f/u.bin" })).toBeNull();
   });
 
   it("set_wifi: nécessite un ssid, pass optionnel", () => {
@@ -158,13 +229,24 @@ describe("handleCommand", () => {
     const r = handleCommand(fog, {
       target: "a-topic/sensor",
       cmd: "ota",
-      url: "http://f/u.bin",
+      url: "https://f/u.bin",
     });
     expect(r.status).toBe(200);
     expect(fog.publishDeviceCommand).toHaveBeenCalledWith("a-topic/sensor", {
       cmd: "ota",
-      url: "http://f/u.bin",
+      url: "https://f/u.bin",
     });
+  });
+
+  it("cible inconnue → 400 (pas de publication MQTT arbitraire)", () => {
+    // Sans cette garde, la console publiait sur n'importe quel topic : bus
+    // tiers (Zigbee2MQTT) ou réinjection vers le fog, abonné à `#`.
+    const r = handleCommand(fog, {
+      target: "zigbee2mqtt/bridge/request/permit_join",
+      cmd: "restart",
+    });
+    expect(r.status).toBe(400);
+    expect(fog.publishDeviceCommand).not.toHaveBeenCalled();
   });
 
   it("cmd manquante → 400", () => {

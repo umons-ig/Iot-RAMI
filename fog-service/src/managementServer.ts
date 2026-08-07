@@ -10,7 +10,7 @@
  * Les commandes sont exécutées côté ESP par le SensorRunner (cf. firmware).
  */
 import http from "http";
-import { timingSafeEqual, createHash } from "crypto";
+import { timingSafeEqual, createHmac, scryptSync } from "crypto";
 
 // Comparaison de chaînes à temps constant (longueurs différentes -> false).
 function constantEquals(a: string, b: string): boolean {
@@ -19,41 +19,147 @@ function constantEquals(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/**
- * Jeton de session DÉRIVÉ du mot de passe (sans état serveur) : sha256 d'un sel
- * fixe + le mot de passe. Stable à travers les redémarrages du fog (contrairement
- * à un set en mémoire) -> on ne se fait plus déconnecter à chaque restart. Ne
- * révèle pas le mot de passe.
- */
-export function sessionTokenFor(password: string): string {
-  return createHash("sha256").update("rami-fog-session::" + password).digest("hex");
+/** Durée de vie d'un jeton de session de la console fog. */
+export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 h
+
+const SESSION_SALT = "rami-fog-session-v2";
+
+// scrypt est volontairement lent : on met la clé dérivée en cache pour ne pas
+// le repayer à chaque requête /api/* (le fog tourne sur un Raspberry Pi).
+const derivedKeyCache = new Map<string, Buffer>();
+
+function sessionKey(password: string): Buffer {
+  const cached = derivedKeyCache.get(password);
+  if (cached) return cached;
+  // scryptSync : dérivation LENTE, contrairement au sha256 d'origine qui
+  // permettait de retrouver le mot de passe admin hors ligne (sel fixe et
+  // public) à des millions d'essais par seconde.
+  const key = scryptSync(password, SESSION_SALT, 32);
+  derivedKeyCache.set(password, key);
+  return key;
 }
 
 /**
- * Vérifie le token de gestion (header X-Mgmt-Token), en temps constant.
- * Si aucun token n'est configuré -> pas d'auth. Logique pure, testable.
+ * Jeton de session dérivé du mot de passe, au format `<expiration>.<hmac>`.
+ *
+ * Deux propriétés que l'ancien `sha256(sel_fixe + password)` n'avait pas :
+ *  - il EXPIRE (l'expiration est signée, donc non falsifiable) ;
+ *  - il ne permet pas de casser le mot de passe hors ligne (clé dérivée par
+ *    scrypt), alors qu'un sha256 non salé se brute-force en quelques minutes.
+ *
+ * Reste sans état côté serveur : un redémarrage du fog ne déconnecte pas.
+ */
+export function sessionTokenFor(
+  password: string,
+  ttlMs: number = SESSION_TTL_MS,
+  now: number = Date.now(),
+): string {
+  const expiresAt = now + ttlMs;
+  const mac = createHmac("sha256", sessionKey(password))
+    .update(String(expiresAt))
+    .digest("hex");
+  return `${expiresAt}.${mac}`;
+}
+
+/** Vérifie un jeton de session : signature valide ET non expiré. */
+export function verifySessionToken(
+  provided: string,
+  password: string,
+  now: number = Date.now(),
+): boolean {
+  if (!password || !provided) return false;
+  const dot = provided.indexOf(".");
+  if (dot <= 0) return false;
+
+  const expiresAtRaw = provided.slice(0, dot);
+  const mac = provided.slice(dot + 1);
+  const expiresAt = Number(expiresAtRaw);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= now) return false;
+
+  const expected = createHmac("sha256", sessionKey(password))
+    .update(expiresAtRaw)
+    .digest("hex");
+  return constantEquals(mac, expected);
+}
+
+/**
+ * Vérifie le token de gestion statique (header X-Mgmt-Token), en temps constant.
+ *
+ * Fail-closed : si aucun token n'est configuré, on REFUSE. Renvoyer `true` dans
+ * ce cas ouvrait l'API de pilotage de la flotte (OTA / WiFi / restart) à tout
+ * le monde dès que la variable d'environnement était absente.
  */
 export function checkToken(provided: string | undefined, expected: string): boolean {
-  if (!expected) return true;
+  if (!expected) return false;
   if (!provided) return false;
   return constantEquals(provided, expected);
 }
 
 /**
- * Autorisation d'une requête /api/*. Auth requise dès qu'un token OU un mot de
- * passe admin est configuré. Accepte : le token statique (scripts) OU un jeton
- * de session (issu du login par mot de passe).
+ * Autorisation d'une requête /api/*. Accepte le token statique (scripts) OU un
+ * jeton de session (issu du login par mot de passe).
+ *
+ * FAIL-CLOSED : sans MGMT_TOKEN ni MGMT_PASSWORD, tout est refusé. La version
+ * précédente renvoyait `true` — or le service d'installation laisse ces
+ * variables vides et le compose écoute au-delà de la loopback : l'API qui
+ * pousse un firmware OTA sur toute la flotte d'ESP était donc accessible sans
+ * la moindre authentification.
  */
 export function isAuthorized(
   headerToken: string | undefined,
   token: string,
   password: string,
 ): boolean {
-  if (!token && !password) return true; // aucune auth configurée
+  if (!token && !password) return false; // aucune auth configurée -> on refuse
   if (!headerToken) return false;
   if (token && constantEquals(headerToken, token)) return true; // token statique (scripts)
-  if (password && constantEquals(headerToken, sessionTokenFor(password))) return true; // session
+  if (password && verifySessionToken(headerToken, password)) return true; // session
   return false;
+}
+
+/**
+ * Anti-bruteforce du login de la console : sans plafond, le mot de passe admin
+ * de la flotte (qui commande l'OTA de tous les ESP) était attaquable à débit
+ * illimité. Fenêtre glissante simple, en mémoire.
+ */
+const LOGIN_MAX_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+// Borne le nombre d'IP suivies : sans plafond, un attaquant usurpant des IP
+// sources ferait croître la Map indéfiniment (épuisement mémoire du Pi).
+const LOGIN_MAX_TRACKED_IPS = 1000;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+export function registerLoginFailure(ip: string, now: number = Date.now()): void {
+  const entry = loginAttempts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    if (loginAttempts.size >= LOGIN_MAX_TRACKED_IPS) {
+      // Purge des fenêtres expirées ; à défaut, on évince la plus ancienne clé.
+      for (const [key, value] of loginAttempts) {
+        if (now >= value.resetAt) loginAttempts.delete(key);
+      }
+      if (loginAttempts.size >= LOGIN_MAX_TRACKED_IPS) {
+        const oldest = loginAttempts.keys().next().value;
+        if (oldest !== undefined) loginAttempts.delete(oldest);
+      }
+    }
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return;
+  }
+  entry.count += 1;
+}
+
+export function isLoginRateLimited(ip: string, now: number = Date.now()): boolean {
+  const entry = loginAttempts.get(ip);
+  if (!entry) return false;
+  if (now >= entry.resetAt) {
+    loginAttempts.delete(ip);
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+export function clearLoginAttempts(ip: string): void {
+  loginAttempts.delete(ip);
 }
 
 /** Vérifie le mot de passe admin (login). */
@@ -116,9 +222,14 @@ export function buildCommandPayload(
   if (!ALLOWED_COMMANDS.has(cmd)) return null;
   switch (cmd) {
     case "ota": {
-      // Valide le schéma : seules des URLs http(s) (pas de file://, data:, etc.).
+      // HTTPS uniquement. Autoriser http:// laissait un attaquant sur le chemin
+      // réseau substituer le binaire et faire exécuter un firmware arbitraire
+      // sur les capteurs. `ALLOW_INSECURE_OTA=true` réserve http:// à un banc
+      // de test (le firmware refuse de son côté sans -DRAMI_ALLOW_INSECURE_OTA).
       const url = params.url ? String(params.url) : "";
-      if (!/^https?:\/\//i.test(url)) return null;
+      const allowInsecure = process.env.ALLOW_INSECURE_OTA === "true";
+      const pattern = allowInsecure ? /^https?:\/\//i : /^https:\/\//i;
+      if (!pattern.test(url)) return null;
       return { cmd, url };
     }
     case "set_wifi":
@@ -160,8 +271,18 @@ export function handleCommand(
     const sent = fog.broadcastDeviceCommand(payload);
     return { status: 200, body: { ok: true, target: "all", sent } };
   }
-  fog.publishDeviceCommand(String(target), payload);
-  return { status: 200, body: { ok: true, target: String(target), sent: 1 } };
+
+  // La cible doit être un appareil CONNU — même garde que /api/ha. Sans elle,
+  // `target` partait tel quel vers `publishDeviceCommand`, donc la console
+  // devenait un injecteur MQTT arbitraire : publication sur un bus tiers
+  // (Zigbee2MQTT…), ou réinjection vers le fog lui-même, qui est abonné à `#`.
+  const targetTopic = String(target);
+  if (!fog.getKnownDevices().includes(targetTopic)) {
+    return { status: 400, body: { error: `capteur inconnu: ${targetTopic}` } };
+  }
+
+  fog.publishDeviceCommand(targetTopic, payload);
+  return { status: 200, body: { ok: true, target: targetTopic, sent: 1 } };
 }
 
 const UI_HTML = `
@@ -440,15 +561,27 @@ export function createManagementServer(
     // Login par mot de passe admin -> renvoie un jeton DÉRIVÉ (sans état, stable
     // à travers les redémarrages du fog). Pas d'auth requise sur cette route.
     if (req.method === "POST" && url === "/api/login") {
+      const clientIp = req.socket.remoteAddress ?? "unknown";
+      if (isLoginRateLimited(clientIp)) {
+        res.writeHead(429, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "trop de tentatives, réessayez plus tard" }));
+        return;
+      }
       let raw = "";
       req.on("data", (c) => { raw += c; if (raw.length > 4096) req.destroy(); });
       req.on("end", () => {
         let pwd = "";
         try { pwd = String((JSON.parse(raw || "{}") as { password?: unknown }).password ?? ""); } catch { /* ignore */ }
         if (password && verifyPassword(pwd, password)) {
+          clearLoginAttempts(clientIp);
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify({ token: sessionTokenFor(password) }));
         } else {
+          // On ne compte un échec QUE si un mot de passe est configuré. Sinon
+          // (fog piloté par MGMT_TOKEN seul), chaque ouverture de la console
+          // passe forcément par cette branche : compter ces appels verrouillait
+          // l'admin légitime au bout de 10 connexions.
+          if (password) registerLoginFailure(clientIp);
           res.writeHead(401, { "content-type": "application/json" });
           res.end(JSON.stringify({ error: password ? "mot de passe invalide" : "login par mot de passe non configuré" }));
         }
@@ -570,9 +703,11 @@ export function createManagementServer(
   });
   server.listen(port, host, () => {
     console.log(`🛠️  [management] web server de gestion sur ${host}:${port}`);
-    if (!token && !password && host !== "127.0.0.1" && host !== "localhost") {
-      console.warn(
-        "⚠️  [management] EXPOSÉ sans MGMT_TOKEN ni MGMT_PASSWORD — l'API pilote OTA/WiFi/restart de la flotte.",
+    if (!token && !password) {
+      console.error(
+        "⛔ [management] Ni MGMT_TOKEN ni MGMT_PASSWORD n'est défini : l'API /api/* " +
+          "REFUSE toutes les requêtes (fail-closed). Définissez l'un des deux pour " +
+          "piloter la flotte (OTA / WiFi / restart).",
       );
     }
   });

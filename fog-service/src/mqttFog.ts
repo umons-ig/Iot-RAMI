@@ -40,6 +40,23 @@ export const mapZigbeeToMeasures = (
 export const haNodeId = (sensorTopic: string): string =>
   sensorTopic.replace(/\/sensor$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
 
+/** Plafond d'appareils suivis en mémoire (le parc réel est de l'ordre de la dizaine). */
+export const MAX_KNOWN_DEVICES = 500;
+
+const MAX_SENSOR_TOPIC_LENGTH = 128;
+
+/**
+ * Vrai si le topic ressemble à un topic capteur légitime.
+ *
+ * Le fog s'abonne à `#`, donc n'importe quel message publié sur le broker
+ * atterrit dans le gestionnaire. Ce filtre borne ce qui peut créer de l'état
+ * persistant (appareil connu, session, timer, ligne d'outbox).
+ */
+export const isPlausibleSensorTopic = (topic: string): boolean =>
+  typeof topic === "string" &&
+  topic.length <= MAX_SENSOR_TOPIC_LENGTH &&
+  /^[A-Za-z0-9][A-Za-z0-9/_.-]*\/sensor$/.test(topic);
+
 /**
  * Construit un message de découverte MQTT Home Assistant pour une mesure d'un
  * capteur. **Config-only** : le `state_topic` pointe DIRECTEMENT sur le topic
@@ -345,7 +362,11 @@ class MqttFog {
     this.buffer.delete(topic);
   }
   private sendAck(topic: string): void {
-    const serveurTopic = topic.replace(TOPICS.SENSOR, TOPICS.SERVER);
+    // Suffixe ANCRÉ : `replace` avec un motif chaîne ne remplace que la
+    // PREMIÈRE occurrence, donc un topic hiérarchique comme
+    // `batimentA/sensors/ecg-12/sensor` recevait son ACK sur un topic erroné —
+    // et le capteur, sans ACK, ré-émettait START indéfiniment.
+    const serveurTopic = topic.replace(/\/sensor$/, TOPICS.SERVER);
     this.mqttClient.publish(
       serveurTopic,
       JSON.stringify({ [MESSAGE_FIELDS.ANS]: COMMANDS.ACK }),
@@ -368,7 +389,7 @@ class MqttFog {
     sensorTopic: string,
     payload: Record<string, unknown>,
   ): void {
-    const serverTopic = sensorTopic.replace(TOPICS.SENSOR, TOPICS.SERVER);
+    const serverTopic = sensorTopic.replace(/\/sensor$/, TOPICS.SERVER);
     this.mqttClient.publish(serverTopic, JSON.stringify(payload));
   }
 
@@ -615,6 +636,23 @@ class MqttFog {
       }
 
       if (!topic.endsWith(TOPICS.SENSOR)) {
+        return;
+      }
+
+      // Le fog est abonné à `#` : TOUT message publié sur le broker atterrit
+      // ici. Sans borne ni validation, publier des topics `<aléatoire>/sensor`
+      // créait à volonté des appareils, des sessions, des timers et des lignes
+      // d'outbox permanents — jusqu'à saturer la mémoire du Pi.
+      if (!isPlausibleSensorTopic(topic)) {
+        return;
+      }
+      if (
+        !this.knownDevices.has(topic) &&
+        this.knownDevices.size >= MAX_KNOWN_DEVICES
+      ) {
+        console.warn(
+          `⚠️ [mqttFog] Plafond de ${MAX_KNOWN_DEVICES} appareils atteint — topic ignoré : ${topic}`,
+        );
         return;
       }
       // Mémorise l'ESP pour le web server de gestion (ESP only, ≠ Zigbee).

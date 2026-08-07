@@ -34,7 +34,7 @@ const outboxClearHaAnnounced = jest.fn().mockResolvedValue(undefined);
 const outboxLoadHaAnnounced = jest.fn().mockResolvedValue([]);
 
 // Import APRES les mocks
-import MqttFog, { mapZigbeeToMeasures, buildHaDiscovery, haNodeId } from "../mqttFog";
+import MqttFog, { mapZigbeeToMeasures, buildHaDiscovery, haNodeId, isPlausibleSensorTopic } from "../mqttFog";
 
 // Helper : crée une instance de MqttFog sans passer par getInstance()
 // (qui appellerait connectBroker + KafkaService.getInstance sur le singleton).
@@ -680,5 +680,23 @@ describe("MqttFog — exposition HA (publication / nettoyage / sécurité)", () 
     await fog.handleZigbeeMessage("zigbee2mqtt/salon", { temperature: 20 });
     expect(fog.getKnownDevices()).not.toContain("salon/sensor");
     expect(fog.getKnownDevices()).toHaveLength(0);
+  });
+});
+
+describe("isPlausibleSensorTopic", () => {
+  it("accepte les topics capteur légitimes", () => {
+    expect(isPlausibleSensorTopic("esp32-dht22-topic/sensor")).toBe(true);
+    expect(isPlausibleSensorTopic("batimentA/etage3/ecg-12/sensor")).toBe(true);
+  });
+
+  it("refuse ce qui ne peut pas être un capteur", () => {
+    // Le fog est abonné à `#` : sans ce filtre, n'importe quel message créait
+    // un appareil, une session et un timer permanents.
+    expect(isPlausibleSensorTopic("")).toBe(false);
+    expect(isPlausibleSensorTopic("pas-de-suffixe")).toBe(false);
+    expect(isPlausibleSensorTopic("/sensor")).toBe(false);
+    expect(isPlausibleSensorTopic("a b c/sensor")).toBe(false);
+    expect(isPlausibleSensorTopic("#/sensor")).toBe(false);
+    expect(isPlausibleSensorTopic("x".repeat(200) + "/sensor")).toBe(false);
   });
 });

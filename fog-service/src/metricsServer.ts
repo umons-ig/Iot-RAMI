@@ -30,10 +30,23 @@ export const formatMetrics = (m: FogMetrics): string =>
     "",
   ].join("\n");
 
-/** Démarre un petit serveur HTTP exposant /metrics et /health. */
+/**
+ * Démarre un petit serveur HTTP exposant /metrics et /health.
+ *
+ * Le bind par défaut reste `0.0.0.0` : le service tourne en conteneur, et une
+ * écoute sur la loopback INTERNE rendrait le port injoignable malgré le mapping
+ * Docker. L'exposition se restreint donc au niveau du mapping — voir
+ * `compose.yaml`, où le port est publié sur `127.0.0.1` uniquement (même
+ * convention que Postgres et Prometheus dans le compose racine).
+ *
+ * `METRICS_HOST` reste disponible pour une exécution hors conteneur. Ne pas le
+ * confondre avec `METRICS_BIND` du compose, qui désigne l'adresse de PUBLICATION
+ * côté hôte : y mettre une IP absente du conteneur ferait échouer le listen.
+ */
 export const startMetricsServer = (
   port: number,
-  provider: () => Promise<FogMetrics>
+  provider: () => Promise<FogMetrics>,
+  host: string = process.env.METRICS_HOST ?? "0.0.0.0"
 ): http.Server => {
   const server = http.createServer((req, res) => {
     if (req.url === "/metrics") {
@@ -58,8 +71,10 @@ export const startMetricsServer = (
     res.writeHead(404);
     res.end();
   });
-  server.listen(port, () => {
-    console.log(`📊 [FogService] Métriques exposées sur :${port}/metrics`);
+  server.listen(port, host, () => {
+    console.log(
+      `📊 [FogService] Métriques exposées sur ${host}:${port}/metrics`
+    );
   });
   return server;
 };
