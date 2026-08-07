@@ -2,10 +2,17 @@ import { envs } from "@utils/env";
 
 import NodeMailer from "nodemailer";
 
+// `secure: false` codé en dur alors que MAIL_PORT vaut 465 par défaut : le 465
+// exige un TLS implicite dès la connexion. En clair, les identifiants SMTP
+// pouvaient partir en clair si le serveur n'annonçait pas STARTTLS.
+// -> TLS implicite sur 465, STARTTLS EXIGÉ (et non plus opportuniste) ailleurs.
+const useImplicitTls = Number(envs.MAIL_PORT) === 465;
+
 const transporter = NodeMailer.createTransport({
   host: envs.MAIL_HOST,
   port: envs.MAIL_PORT,
-  secure: false,
+  secure: useImplicitTls,
+  requireTLS: !useImplicitTls,
   auth: {
     user: envs.MAIL_USER,
     pass: envs.MAIL_PASSWORD,
