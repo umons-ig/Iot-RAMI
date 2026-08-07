@@ -1,5 +1,11 @@
 # Stage 1: Build
-FROM node:lts-slim AS builder
+# Version majeure ÉPINGLÉE : `node:lts-slim` est un tag mouvant. Au basculement
+# du LTS vers Node 24 — qui a supprimé SlowBuffer, dont jsonwebtoken dépend de
+# façon transitive — une simple reconstruction produisait une image dont le
+# backend ne démarrait plus. Monter de version doit être un choix, pas un effet
+# de bord du calendrier de Node. (Le polyfill de src/polyfills.ts couvre le cas,
+# mais l'épinglage évite d'en dépendre.)
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -20,7 +26,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Stage 2: Production
-FROM node:lts-slim
+FROM node:22-slim
 
 WORKDIR /home/node/app
 

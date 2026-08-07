@@ -1,9 +1,6 @@
-// Polyfill for Node.js >= 22 (SlowBuffer removed)
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const buffer = require("buffer");
-if (!buffer.SlowBuffer) {
-  buffer.SlowBuffer = buffer.Buffer;
-}
+// DOIT rester le premier import : installe le polyfill SlowBuffer avant que
+// jsonwebtoken ne soit chargé (cf. src/polyfills.ts).
+import "@/polyfills";
 
 import app from "@/app";
 import http from "http";
