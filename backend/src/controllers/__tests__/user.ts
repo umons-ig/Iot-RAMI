@@ -514,6 +514,10 @@ describe("User controller", () => {
       // Mocking bcrypt.hash to return a hashed password
       bcrypt.hash = jest.fn().mockReturnValueOnce("hashedpassword");
       // Mocking jwt.verify to return a valid payload (this is done in jest.mock block above)
+      // Le corps porte un `newPassword` : le contrôleur fait tourner
+      // refreshTokenVersion (révocation des sessions ouvertes ailleurs) et
+      // réémet donc un jeton au lieu de renvoyer celui de la requête.
+      (jwt.sign as jest.Mock).mockReturnValue("token-reemis");
 
       const response = await superTest(app)
         .put(`${baseUri}/update`)
@@ -546,8 +550,47 @@ describe("User controller", () => {
         sex: expectedResponse.sex,
         role: expectedResponse.role,
         expiresAt: expect.any(Number),
-        token: expectedResponse.token,
+        token: "token-reemis",
       });
+      // Le changement de mot de passe DOIT invalider les sessions existantes :
+      // sans rotation de version, un refresh token volé restait valable 7 jours.
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ refreshTokenVersion: 1 })
+      );
+    });
+
+    test("should NOT rotate refreshTokenVersion when the password is unchanged", async () => {
+      const userTest = {
+        firstName: "Johnathan",
+        lastName: "Doe",
+        sex: Sex.MALE,
+        email: "john.doe@example.com",
+        password: "longoldpassword",
+      };
+
+      const updateMock = jest.fn().mockReturnValueOnce({
+        ...mockUserOfUserType,
+        ...userTest,
+      });
+      User.findByPk = jest.fn().mockReturnValueOnce({
+        ...mockUserOfUserType,
+        password: "hashedlongoldpassword",
+        update: updateMock,
+      });
+      User.findOne = jest.fn().mockReturnValueOnce(null);
+      bcrypt.compare = jest.fn().mockReturnValueOnce(true);
+
+      const response = await superTest(app)
+        .put(`${baseUri}/update`)
+        .set("Authorization", `Bearer 1234`)
+        .send(userTest);
+
+      expect(response.statusCode).toBe(200);
+      // Une simple mise à jour de profil ne doit déconnecter personne.
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.not.objectContaining({ refreshTokenVersion: expect.anything() })
+      );
+      expect(response.body.token).toBe("1234");
     });
   });
   describe("/update/role", () => {

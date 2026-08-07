@@ -8,14 +8,18 @@ import {
   addMember,
   removeMember,
 } from "@controllers/team";
-import { auth, authAdmin } from "@middlewares/auth";
+import { authAdmin } from "@middlewares/auth";
 
 const router = express.Router();
 
-router.get("/", auth, getTeams);
+// Lecture réservée aux admins, comme l'écriture juste en dessous : `GET /:id`
+// renvoie nom + email de tous les membres, soit l'annuaire complet des
+// utilisateurs pour qui énumérait d'abord `GET /`. La vue Teams du frontend est
+// déjà admin-only (router/index.ts), donc aucun usage légitime n'est perdu.
+router.get("/", authAdmin, getTeams);
 router.post("/", authAdmin, createTeam);
 
-router.get("/:id", auth, getTeam);
+router.get("/:id", authAdmin, getTeam);
 router.put("/:id", authAdmin, updateTeam);
 router.delete("/:id", authAdmin, deleteTeam);
 

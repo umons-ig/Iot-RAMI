@@ -183,6 +183,11 @@ const signup = async (req: Request, res: Response) => {
     // Check email does not already exist
     const user = await User.findOne({ where: { email } });
     if (user) {
+      // NB (audit) : cette réponse confirme l'existence d'un compte
+      // (énumération). Choix ASSUMÉ — le front en a besoin pour guider l'usager,
+      // et masquer le seul message serait inutile puisque le code d'erreur
+      // voyage dans la même réponse. L'exploitation de masse est bornée par
+      // `signupLimiter` (20 tentatives / 15 min par IP, cf. app.ts).
       throw new BadRequestException(
         "Email already used !",
         "user.email.already.used"
@@ -364,6 +369,12 @@ const updateUserInformation = async (req: Request, res: Response) => {
         newPassword,
         envs.BCRYPT_SALT_ROUNDS
       );
+      // Changer son mot de passe DOIT invalider les sessions ouvertes ailleurs :
+      // sans cette incrémentation, le refresh token d'un attaquant restait
+      // valable 7 jours, donc le geste réflexe après une compromission (« je
+      // change mon mot de passe ») ne le déconnectait pas.
+      updatedData.refreshTokenVersion =
+        ((user as any).refreshTokenVersion ?? 0) + 1;
     }
 
     const updatedUser = await user.update(updatedData);
@@ -374,7 +385,12 @@ const updateUserInformation = async (req: Request, res: Response) => {
         .json(new ServerErrorException("Server error !", "server.error"));
     }
 
-    const currentToken = req.headers.authorization?.split(" ")[1];
+    // Après rotation de la version, l'ancien refresh token n'est plus valable :
+    // on en réémet un pour la session courante, sinon l'utilisateur qui vient de
+    // changer son mot de passe serait déconnecté à son prochain refresh.
+    const currentToken = newPassword
+      ? undefined
+      : req.headers.authorization?.split(" ")[1];
     const responseData = generateUserResponse(updatedUser, res, currentToken);
     return res.status(200).json(responseData);
   } catch (error) {
@@ -500,7 +516,13 @@ const getAllRoleWithWorseRole = async (req: Request, res: Response) => {
           )
         );
     }
-    const users = await User.findAll({ where: { role: roles } });
+    // `exclude: password` impératif : sans lui, la réponse embarquait le hash
+    // bcrypt de chaque utilisateur, servi tel quel au navigateur (cassage hors
+    // ligne + réutilisation de mot de passe).
+    const users = await User.findAll({
+      where: { role: roles },
+      attributes: { exclude: ["password"] },
+    });
     if (!users) {
       return res
         .status(404)
@@ -573,8 +595,14 @@ const getUserSessions = async (req: Request, res: Response) => {
       }
     }
 
-    const limit = parseInt(String(req.query.limit || "50"), 10);
-    const offset = parseInt(String(req.query.offset || "0"), 10);
+    // Bornes alignées sur les autres routes paginées (getAllSessions,
+    // getSensor…). Sans elles, `?limit=abc` injectait un NaN dans la clause
+    // LIMIT — erreur SQL renvoyée en 500 — et `?limit=1e9` ne plafonnait rien.
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(String(req.query.limit), 10) || 50)
+    );
+    const offset = Math.max(0, parseInt(String(req.query.offset), 10) || 0);
 
     const { count, rows } = await Session.findAndCountAll({
       where: whereClause,
@@ -655,8 +683,12 @@ const refresh = async (req: Request, res: Response) => {
         .json(new UnauthorizedException("Token révoqué", "auth.token.revoked"));
     }
 
+    // Le rôle est relu en BASE, pas repris du token : sinon une rétrogradation
+    // (admin -> regular) n'était jamais appliquée, l'ancien rôle se réémettant
+    // à chaque refresh pendant les 7 jours de validité du refresh token.
+    const currentRole = dbUser.role;
     const newToken = jwt.sign(
-      { userId: payload.userId, role: payload.role },
+      { userId: payload.userId, role: currentRole },
       envs.JWT_SECRET,
       {
         expiresIn: envs.JWT_EXPIRATION as any,
@@ -665,7 +697,7 @@ const refresh = async (req: Request, res: Response) => {
     const newRefreshToken = jwt.sign(
       {
         userId: payload.userId,
-        role: payload.role,
+        role: currentRole,
         refreshTokenVersion: dbUser.refreshTokenVersion,
       },
       envs.REFRESH_TOKEN_SECRET,

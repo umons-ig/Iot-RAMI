@@ -3,6 +3,27 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Ce seeder crée un compte ADMIN dont le hash bcrypt est committé (donc le
+    // mot de passe est public : il figure dans le README). `init-db` étant la
+    // procédure d'installation documentée, ce compte finissait en production.
+    // On refuse de le créer en prod, sauf opt-in explicite pour une démo.
+    // On SAUTE ce seeder (return) au lieu de lever : `db:seed:all` s'arrête à la
+    // première exception, et ce fichier est le premier par ordre alphabétique.
+    // Lever ici empêcherait les seeders de MeasurementTypes de s'exécuter, or
+    // sans eux le consommateur Kafka ignore chaque mesure reçue : la plateforme
+    // paraîtrait fonctionner tout en n'enregistrant aucune donnée patient.
+    if (
+      process.env.NODE_ENV === "production" &&
+      process.env.ALLOW_DEMO_SEED !== "true"
+    ) {
+      console.warn(
+        "[seed] Compte de démo NON créé en production (son mot de passe est " +
+          "public, le hash étant committé). Créez un administrateur avec un mot " +
+          "de passe propre, ou forcez avec ALLOW_DEMO_SEED=true."
+      );
+      return;
+    }
+
     await queryInterface.bulkInsert(
       "Users",
       [
